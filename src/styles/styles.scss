@@ -1,0 +1,112 @@
+ul.no-bullet {
+  list-style-type: none;
+}
+
+.cursor-pointer {
+  cursor: pointer;
+}
+
+.cursor-help {
+  cursor: help;
+}
+
+@each $type in row, column {
+  .flex-gap,
+  .flex-gap-#{$type} {
+    &-small {
+      #{$type}-gap: 4px;
+    }
+
+    & {
+      #{$type}-gap: 8px;
+    }
+
+    &-large {
+      #{$type}-gap: 16px;
+    }
+  }
+}
+
+:where(.wrap-word) {
+  overflow-wrap: break-word;
+}
+
+:where(.wrap-anywhere) {
+  overflow-wrap: anywhere;
+}
+
+.text-noselect {
+  -webkit-touch-callout: default; /* iOS Safari */
+  -webkit-user-select: none; /* Safari */
+  -khtml-user-select: none; /* Konqueror HTML */
+  -moz-user-select: none; /* Firefox */
+  -ms-user-select: none; /* Internet Explorer/Edge */
+  user-select: none;
+}
+
+.text-select {
+  -webkit-touch-callout: default;
+  -webkit-user-select: text;
+  -khtml-user-select: text;
+  -moz-user-select: text;
+  -ms-user-select: text;
+  user-select: text;
+}
+
+:where(.inherit-bg) {
+  background-color: inherit;
+}
+
+/* scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  background: background-color;
+}
+::-webkit-scrollbar-thumb {
+  border-radius: 16px;
+  background: #6b7280;
+}
+
+/* Fix for ripple effect on Safari */
+tr.ripple-fix {
+  transform: translate(0);
+  clip-path: inset(0);
+}
+
+/* iOS PWA */
+.ios-padding {
+  padding-top: calc(env(safe-area-inset-top) * 0.5);
+}
+
+.ios-margin {
+  margin-top: calc(env(safe-area-inset-top) * 0.5);
+}
+
+/* Wider scrollbar for menus (Other than firefox) */
+.v-list::-webkit-scrollbar {
+  width: 0.8rem;
+}
+
+/* Grid layout */
+.d-grid {
+  display: grid;
+}
+
+/* Setup grid column templates from 1 to 8 with step 2 */
+@for $i from 1 through 4 {
+  $i-step: $i * 2;
+
+  .grid-columns {
+    &-#{$i-step} {
+      grid-template-columns: repeat($i-step, 1fr);
+    }
+  }
+}
+
+@for $i from 1 through 8 {
+  .grid-col-span {
+    &-#{$i} {
+      grid-column: span $i;
+    }
+  }
+}

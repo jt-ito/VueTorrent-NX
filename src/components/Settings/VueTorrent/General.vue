@@ -12,7 +12,7 @@ import qbit from '@/services/qbit'
 import { Github } from '@/services/Github'
 import { useAppStore, useDialogStore, useHistoryStore, useTorrentStore, useVueTorrentStore, usePreferenceStore } from '@/stores'
 import { DarkLegacy, DarkOled, DarkRedesigned, LightLegacy, LightRedesigned } from '@/themes'
-import { normalizeExtension, reconcileNativeExcludedFiles } from '@/utils/helpers'
+import { normalizeExtension } from '@/utils/helpers'
 
 const { t } = useI18nUtils()
 const appStore = useAppStore()

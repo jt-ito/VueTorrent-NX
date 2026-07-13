@@ -1,19 +1,19 @@
-# VueTorrent
+# VueTorrent-NX
 
 The sleekest looking WebUI for qBittorrent made with Vue.js!
 
 [![Discord](https://img.shields.io/discord/1170618192956243998?logo=discord)](https://discord.gg/KDQP7fR467)
 
-![VueTorrent](https://cdn.jsdelivr.net/gh/VueTorrent/VueTorrent@master/VueTorrent-logo.png)
+![VueTorrent](https://cdn.jsdelivr.net/gh/jt-ito/VueTorrent-NX@main/VueTorrent-logo.png)
 
 ![Vue](https://img.shields.io/badge/Vue-%5E3.4.26-brightgreen) ![Vuetify](https://img.shields.io/badge/Vuetify-%5E3.6.4-brightgreen)
 ![qBittorrent](https://img.shields.io/badge/qBittorrent-4.4%2B-brightgreen)
 
-![stars](https://img.shields.io/github/stars/VueTorrent/VueTorrent) ![Forks](https://img.shields.io/github/forks/VueTorrent/VueTorrent)
-![Issues](https://img.shields.io/github/issues/VueTorrent/VueTorrent) ![Closed](https://img.shields.io/github/issues-closed/VueTorrent/VueTorrent)
-![Closed PR](https://img.shields.io/github/issues-pr-closed/VueTorrent/VueTorrent) ![Version](https://img.shields.io/github/v/release/VueTorrent/vuetorrent)
-![Test Status](https://img.shields.io/github/actions/workflow/status/VueTorrent/vuetorrent/test.yml)
-![Downloads](https://img.shields.io/github/downloads/VueTorrent/VueTorrent/total)
+![stars](https://img.shields.io/github/stars/jt-ito/VueTorrent-NX) ![Forks](https://img.shields.io/github/forks/jt-ito/VueTorrent-NX)
+![Issues](https://img.shields.io/github/issues/jt-ito/VueTorrent-NX) ![Closed](https://img.shields.io/github/issues-closed/jt-ito/VueTorrent-NX)
+![Closed PR](https://img.shields.io/github/issues-pr-closed/jt-ito/VueTorrent-NX) ![Version](https://img.shields.io/github/v/release/jt-ito/VueTorrent-NX)
+![Test Status](https://img.shields.io/github/actions/workflow/status/jt-ito/VueTorrent-NX/test.yml)
+![Downloads](https://img.shields.io/github/downloads/jt-ito/VueTorrent-NX/total)
 [![Contributor Covenant](https://img.shields.io/badge/Contributor_Covenant-2.1-4baaaa.svg)](.github/CODE_OF_CONDUCT.md)
 
 ## Screenshots
@@ -56,7 +56,7 @@ A live demo **with mocked data** is available here: <https://vuetorrent.github.i
 
 ## Installation
 
-Checkout the [wiki](https://github.com/VueTorrent/VueTorrent/wiki/Installation)!
+Checkout the [wiki](https://github.com/jt-ito/VueTorrent-NX/wiki/Installation)!
 
 ## Development
 
@@ -67,7 +67,7 @@ Checkout the [wiki](https://github.com/VueTorrent/VueTorrent/wiki/Installation)!
 - `npm run lint:fix` (to fix common problems)
 - `docker-compose up -d` (starts a qbittorrent docker, optional)
 - Open the WebUI on localhost with the default credentials
-  - See [#1720](https://github.com/VueTorrent/VueTorrent/issues/1720) for more details
+  - See [#1720](https://github.com/jt-ito/VueTorrent-NX/issues/1720) for more details
 - Make sure WebUI > "Host header validation" is disabled in the qBittorrent preferences
 - Copy `.env.sample` to `.env` to tweak your dev environment (e.g. mocked data)
 
@@ -98,7 +98,7 @@ Checkout the [wiki](https://github.com/VueTorrent/VueTorrent/wiki/Installation)!
   - mobile friendly! (can be installed as a PWA)
   - Configureable Dashboard: choose which torrent properties are shown for both busy and completed torrents
 - Optimized for the latest version of qBittorrent
-- Additional backend for improved experience, [see the repo for more info](https://github.com/VueTorrent/vuetorrent-backend)
+- Additional backend for improved experience, [see the repo for more info](https://github.com/jt-ito/VueTorrent-NX-backend)
   - This is a work in progress, and is not required to use VueTorrent
   - Stores server-side settings
 - Supports [qBittorrent Enhanced Edition](https://github.com/c0re100/qBittorrent-Enhanced-Edition) preferences
@@ -130,17 +130,17 @@ We gladly accept contributions!
 
 Any help is appreciated, whether it's reporting bugs, suggesting enhancements, contributing code or localizing the app.
 
-See the [Contributing Guidelines](https://github.com/VueTorrent/VueTorrent/blob/master/.github/CONTRIBUTING.md) for more information.
+See the [Contributing Guidelines](https://github.com/jt-ito/VueTorrent-NX/blob/main/.github/CONTRIBUTING.md) for more information.
 
 ## Support
 
 - [![Discord](https://img.shields.io/discord/1170618192956243998?logo=discord)](https://discord.gg/KDQP7fR467)
-- [![Wiki](https://img.shields.io/badge/Wiki-blue)](https://github.com/VueTorrent/VueTorrent/wiki)
-- [![FAQ](https://img.shields.io/badge/FAQ-orange)](https://github.com/VueTorrent/VueTorrent/wiki/FAQ)
+- [![Wiki](https://img.shields.io/badge/Wiki-blue)](https://github.com/jt-ito/VueTorrent-NX/wiki)
+- [![FAQ](https://img.shields.io/badge/FAQ-orange)](https://github.com/jt-ito/VueTorrent-NX/wiki/FAQ)
 
 If any of the above didn't help, feel free to open an issue!
 
-See the [Contributing Guidelines](https://github.com/VueTorrent/VueTorrent/blob/master/.github/CONTRIBUTING.md) for more information.
+See the [Contributing Guidelines](https://github.com/jt-ito/VueTorrent-NX/blob/main/.github/CONTRIBUTING.md) for more information.
 
 ## Funding
 

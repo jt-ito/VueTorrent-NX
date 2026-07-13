@@ -164,12 +164,7 @@ const paginationSizeMessages = computed(() =>
 async function resetSettings() {
   if (preferenceStore.preferences) {
     try {
-      const { finalGlobsStr } = reconcileNativeExcludedFiles(
-        preferenceStore.preferences.excluded_file_names,
-        vueTorrentStore.lastPushedNativeExcludedExtensions,
-        []
-      )
-      await qbit.setPreferences({ excluded_file_names: finalGlobsStr, excluded_file_names_enabled: false })
+      await qbit.setPreferences({ excluded_file_names: '', excluded_file_names_enabled: false })
     } catch(e) {
       // Ignore
     }

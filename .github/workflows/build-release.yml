@@ -27,8 +27,7 @@ jobs:
 
       - name: Zip Artifact
         run: |
-          cd vuetorrent/public
-          zip -r ../../vuetorrent.zip ./*
+          zip -r vuetorrent.zip vuetorrent/
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2

@@ -504,7 +504,7 @@ export default class QBitProvider implements IProvider {
 
   async addTorrents(torrents: File[], urls: string, params?: AddTorrentPayload): Promise<void> {
     let data
-    if (torrents) {
+    if (torrents && torrents.length > 0) {
       // torrent files
       const formData = new FormData()
       for (const [key, value] of Object.entries(params || {})) {

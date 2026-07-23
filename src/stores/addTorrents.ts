@@ -1,5 +1,5 @@
 import { acceptHMRUpdate, defineStore } from 'pinia'
-import { computed, reactive, ref, shallowRef } from 'vue'
+import { computed, reactive, ref, shallowRef, watch } from 'vue'
 import { useAppStore } from './app'
 import { usePreferenceStore } from './preferences'
 import { useVueTorrentStore } from './vuetorrent'
@@ -123,6 +123,11 @@ export const useAddTorrentStore = defineStore(
      */
     const activeLocalAdds = ref(0)
     const deferredExternalHashes = ref<Set<string>>(new Set())
+    watch(deferredExternalHashes, (val: any) => {
+      if (!(val instanceof Set)) {
+        deferredExternalHashes.value = new Set(Array.isArray(val) ? val : Object.keys(val || {}))
+      }
+    }, { immediate: true, deep: false })
 
     async function addTorrentStopped(torrentFiles: File[], torrentUrls: string, payload: AddTorrentPayload): Promise<string | null> {
       activeLocalAdds.value++
@@ -134,7 +139,7 @@ export const useAddTorrentStore = defineStore(
         }
 
       // 2. Snapshot existing state for .torrent file diffing
-      const beforeTime = Date.now() / 1000
+      const beforeTime = Math.floor(Date.now() / 1000) - 2
       let torrentName: string | null = null
       if (torrentFiles.length > 0) {
         torrentName = torrentFiles[0].name.replace(/\.torrent$/i, '')
@@ -268,6 +273,12 @@ export const useAddTorrentStore = defineStore(
     }
 
     const pendingPickerHashes = ref<Set<string>>(new Set())
+    watch(pendingPickerHashes, (val: any) => {
+      if (!(val instanceof Set)) {
+        pendingPickerHashes.value = new Set(Array.isArray(val) ? val : Object.keys(val || {}))
+      }
+    }, { immediate: true, deep: false })
+    
     const processedExternalHashes = ref<string[]>([])
 
     async function processExternalTorrentBlocklist(hash: string) {
@@ -332,7 +343,7 @@ export const useAddTorrentStore = defineStore(
     persistence: {
       enabled: true,
       storageItems: [
-        { storage: sessionStorage, excludePaths: ['files'] },
+        { storage: sessionStorage, excludePaths: ['files', 'pendingPickerHashes', 'deferredExternalHashes', 'activeLocalAdds', 'isFirstFullSync'] },
         { storage: localStorage, includePaths: ['processedExternalHashes'] }
       ],
     },

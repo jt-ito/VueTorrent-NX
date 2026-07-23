@@ -5,11 +5,12 @@ import { useDialog, useI18nUtils } from '@/composables'
 import { useTreeBuilder } from '@/composables'
 import { FilePriority } from '@/constants/qbit'
 import qbit from '@/services/qbit'
-import { useAddTorrentStore, useVueTorrentStore } from '@/stores'
+import { useAddTorrentStore, useVueTorrentStore, usePreferenceStore } from '@/stores'
 import { TorrentFile } from '@/types/qbit/models'
 import { AddTorrentPayload } from '@/types/qbit/payloads'
 import { TreeNode } from '@/types/vuetorrent'
 import { getBlockedFileIds } from '@/stores/addTorrents'
+import { globToExtension } from '@/utils/helpers'
 
 const props = withDefaults(
   defineProps<{
@@ -27,6 +28,7 @@ const { isOpened } = useDialog(props.guid)
 const { t } = useI18nUtils()
 const addTorrentStore = useAddTorrentStore()
 const vuetorrentStore = useVueTorrentStore()
+const preferenceStore = usePreferenceStore()
 
 // ─── State machine ───────────────────────────────────────────────────────────
 type Step = 'waiting_metadata' | 'picking' | 'applying' | 'done' | 'error' | 'timeout'
@@ -85,8 +87,16 @@ async function loadFiles() {
   addTorrentStore.pendingPickerHashes.add(props.hash)
   const torrentFiles = await qbit.getTorrentFiles(props.hash)
   files.value = torrentFiles
+  
+  // Combine VueTorrent blocked extensions with native qBittorrent excluded globs
+  const nativeGlobs = preferenceStore.preferences?.excluded_file_names_enabled 
+    ? (preferenceStore.preferences?.excluded_file_names || '').split('\n').filter(Boolean)
+    : []
+  const nativeExts = nativeGlobs.map(globToExtension).filter(Boolean) as string[]
+  const allBlockedExts = [...vuetorrentStore.blockedExtensions, ...nativeExts]
+
   // Pre-select blocklist-matching files as deselected
-  const blockedIds = getBlockedFileIds(torrentFiles, vuetorrentStore.blockedExtensions)
+  const blockedIds = getBlockedFileIds(torrentFiles, allBlockedExts)
   deselectedIds.value = new Set(blockedIds)
   triggerRef(deselectedIds)
   expandAll()
@@ -177,7 +187,7 @@ onBeforeUnmount(() => {
 <template>
   <v-dialog
     v-model="isOpened"
-    :class="$vuetify.display.mobile ? '' : 'w-75'"
+    :max-width="800"
     :fullscreen="$vuetify.display.mobile"
     scrollable
     :transition="openSuddenly ? 'none' : 'dialog-bottom-transition'"

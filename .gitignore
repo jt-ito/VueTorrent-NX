@@ -33,3 +33,5 @@ docker/**
 coverage/
 config/
 *.zip
+test_torrents/
+

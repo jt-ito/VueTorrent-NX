@@ -34,19 +34,15 @@ The sleekest, most robust WebUI for qBittorrent — built with Vue.js!
 
 ## ✨ What Makes VueTorrent-NX Different?
 
-VueTorrent-NX takes the incredibly beautiful visual design of the original VueTorrent WebUI and transforms it into a hardened, automation-friendly powerhouse. If you've ever experienced concurrency issues, UI freezes, or file-picker race conditions while using automation tools like Sonarr or Radarr (*arr stack), **VueTorrent-NX is built for you.**
+VueTorrent-NX is a hardened, automation-friendly, and meticulously polished fork of the original VueTorrent WebUI. While the original VueTorrent is a beautiful visual skin for qBittorrent, it suffers from several concurrency, persistence, and file-picker race conditions when used alongside *arr stack automation (Sonarr, Radarr, etc.).
 
-We've completely overhauled the core engine to prioritize flawless concurrency, zero-crash state management, and an unparalleled aesthetic experience. 
+**VueTorrent-NX introduces the following critical fixes and major features:**
 
-### 🚀 Key Features & Fixes
-
-- **Native Exclusion Syncing (NEW!):** The Pre-Download File Selection dialog now seamlessly integrates with your native qBittorrent `excluded_file_names` setting! Whenever you add a new torrent, any files matching your native exclusions (such as `*.exe`, `*.txt`, or `*.nfo`) are automatically detected and deselected in the beautiful Vue UI before the download even begins.
-- **Flawless UI Layouts (NEW!):** We've eliminated the visual bugs and awkward alignments present in the original file-picker dialogs. The pre-download picker is now perfectly centered and elegantly restrained to a clean 800px width on desktop devices for maximum readability.
-- **Zero-Crash State Persistence (NEW!):** We've resolved critical underlying bugs related to Vue 3 state persistence across page reloads. You will no longer encounter state-wiping crashes (like the infamous `pendingPickerHashes.has is not a function` error) when refreshing your dashboard.
-- **Bulletproof Automation Safety:** Say goodbye to manual interventions locking up your system. VueTorrent-NX prevents the manual file-picker dialog from accidentally intercepting or freezing background torrents added by external APIs (like Sonarr or Radarr).
-- **Advanced Concurrency Guards:** We've introduced strict `activeLocalAdds` guards and `try/finally` safety wrappers. This eliminates race conditions during rapid, UI-initiated torrent additions and guarantees your *arr stack continues functioning smoothly in the background.
-- **Resilient Hash Resolution:** We've replaced the fragile strict-equality string matching for `.torrent` file uploads with a resilient fuzzy-matching algorithm and a timestamp-based fallback, ensuring the WebUI never fails to resolve a torrent hash.
-- **Independent & Fast CI/CD:** We utilize a completely streamlined, standard GitHub Actions release pipeline specifically tailored for this fork, abandoning the complex upstream pipelines to bring you faster, more reliable updates.
+- **Automation Safety:** Prevents the manual file-picker dialog from accidentally intercepting or locking up background torrents added by external APIs (like Sonarr/Radarr).
+- **Concurrency Guards:** Introduces strict `activeLocalAdds` guards and `try/finally` safety wrappers to prevent race conditions during rapid UI-initiated adds, keeping your *arr stack functioning smoothly in the background.
+- **Robust Hash Resolution:** Replaces fragile strict-equality string matching for `.torrent` uploads with a resilient fuzzy-matching algorithm and a timestamp-based fallback, ensuring the WebUI never fails to resolve a torrent hash.
+- **Native Exclusion Syncing:** The Pre-Download File Selection dialog now seamlessly reads your native qBittorrent `excluded_file_names` setting! When you add a new torrent, any files matching your native exclusions (like `*.exe` or `*.txt`) are automatically deselected in the beautiful Vue UI before the download even begins. It also correctly manages this state without permanent native pollution, allowing "Reset Settings" to cleanly wipe exclusions.
+- **Independent CI/CD:** Uses a completely streamlined, standard GitHub Actions release pipeline tailored for this fork, abandoning the complex upstream pipelines.
 
 ---
 

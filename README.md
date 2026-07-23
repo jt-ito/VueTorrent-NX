@@ -2,7 +2,6 @@
 
 The sleekest, most robust WebUI for qBittorrent — built with Vue.js!
 
-[![Discord](https://img.shields.io/discord/1170618192956243998?logo=discord)](https://discord.gg/KDQP7fR467)
 ![Vue](https://img.shields.io/badge/Vue-%5E3.4.26-brightgreen) ![Vuetify](https://img.shields.io/badge/Vuetify-%5E3.6.4-brightgreen)
 ![qBittorrent](https://img.shields.io/badge/qBittorrent-4.4%2B-brightgreen)
 ![Version](https://img.shields.io/github/v/release/jt-ito/VueTorrent-NX)

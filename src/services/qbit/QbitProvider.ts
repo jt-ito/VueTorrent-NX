@@ -110,7 +110,12 @@ export default class QBitProvider implements IProvider {
    * @example this.post('/auth/login', { username: 'admin', password: 'adminadmin' })
    */
   private async post(route: string, params?: Parameters, config?: AxiosRequestConfig): Promise<AxiosResponse> {
-    const data = new URLSearchParams(params)
+    const data = new URLSearchParams()
+    for (const [key, value] of Object.entries(params || {})) {
+      if (value !== undefined) {
+        data.set(key, String(value))
+      }
+    }
     return this.axios.post(route, data, config)
   }
 
@@ -473,9 +478,9 @@ export default class QBitProvider implements IProvider {
         (files: TorrentFile[]) =>
           files.some(file => file.index === undefined)
             ? files.map((file: TorrentFile, index: number) => ({
-                ...file,
-                index,
-              }))
+              ...file,
+              index,
+            }))
             : files
         /**
          * We manually add indexes to the response if they are missing to provide compatibility with older versions of qbittorent (< 4.4.0)
@@ -520,7 +525,12 @@ export default class QBitProvider implements IProvider {
       data = formData
     } else {
       // magnet links
-      data = new URLSearchParams((params || {}) as Parameters)
+      data = new URLSearchParams()
+      for (const [key, value] of Object.entries(params || {})) {
+        if (value !== undefined) {
+          data.set(key, String(value))
+        }
+      }
     }
 
     if (urls) {

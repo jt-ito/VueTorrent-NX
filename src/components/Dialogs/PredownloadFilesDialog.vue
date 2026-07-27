@@ -103,7 +103,7 @@ async function loadFiles() {
   expandAll()
 
   // Skip picker if it's a single file and not blocked
-  if (torrentFiles.length <= 1 && blockedIds.length === 0) {
+  if (vuetorrentStore.skipPickerForSingleFile && torrentFiles.length <= 1 && blockedIds.length === 0) {
     void confirm()
     return
   }

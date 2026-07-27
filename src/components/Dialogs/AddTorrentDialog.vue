@@ -81,7 +81,7 @@ async function submit() {
   const torrentsCount = torrentFiles.length + torrentUrls.split('\n').filter(url => url.trim().length).length
 
   // ── Feature 1: Show pre-download file picker ──────────────────────────────
-  if (vueTorrentStore.showPredownloadPicker) {
+  if (vueTorrentStore.showPredownloadPicker && torrentsCount === 1) {
     // Detect if source is a magnet/URL (needs metadata poll) or .torrent file
     const isMagnet = torrentFiles.length === 0
 
@@ -101,7 +101,7 @@ async function submit() {
       const allBlockedExts = [...vueTorrentStore.blockedExtensions, ...nativeExts]
       
       const blockedIds = getBlockedFileIds(torrentFilesList, allBlockedExts)
-      if (torrentFilesList.length <= 1 && blockedIds.length === 0) {
+      if (vueTorrentStore.skipPickerForSingleFile && torrentFilesList.length <= 1 && blockedIds.length === 0) {
         await qbit.removeTorrentTag([hashOrNull], ['vt-predownload'])
         await addTorrentStore.resumeTorrent(hashOrNull)
         

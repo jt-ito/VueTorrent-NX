@@ -446,6 +446,17 @@ function openDurationFormatHelp() {
             {{ t('settings.vuetorrent.general.torrent_adding.show_picker_hint') }}
           </div>
         </v-col>
+        <v-expand-transition>
+          <v-col v-if="vueTorrentStore.showPredownloadPicker" cols="12" class="pt-0">
+            <v-checkbox
+              v-model="vueTorrentStore.skipPickerForSingleFile"
+              hide-details
+              :label="t('settings.vuetorrent.general.torrent_adding.skip_single_file')" />
+            <div class="text-caption text-grey ml-10">
+              {{ t('settings.vuetorrent.general.torrent_adding.skip_single_file_hint') }}
+            </div>
+          </v-col>
+        </v-expand-transition>
 
         <!-- Feature 2: Extension blocklist -->
         <v-col cols="12">

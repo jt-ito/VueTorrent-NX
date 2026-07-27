@@ -1225,6 +1225,8 @@
           "subheader": "Torrent Adding",
           "show_picker": "Show file selection dialog before downloading",
           "show_picker_hint": "After adding a torrent or magnet, a dialog will appear listing all files. Uncheck any files you don't want to download before the download begins.",
+          "skip_single_file": "Skip file selector for torrents with a single file",
+          "skip_single_file_hint": "Automatically begins downloading if the torrent only contains 1 file, bypassing the selector.",
           "blocked_ext_label": "Auto-skip files with these extensions",
           "blocked_ext_hint": "Files with these extensions will automatically be skipped (priority set to Do Not Download). Works with or without the file picker.",
           "blocked_ext_native_note": "For always-on filtering that doesn't depend on VueTorrent being open, also enable qBittorrent's own 'Excluded file names' setting under Downloads preferences — through testing, it seems to be working, but just be aware this native setting has known bugs in some qBittorrent versions where it's silently ignored for magnet links and RSS/automation-added torrents.",

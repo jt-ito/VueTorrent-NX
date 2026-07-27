@@ -61,6 +61,7 @@ export const useVueTorrentStore = defineStore(
 
     // Feature 1: pre-download file selection
     const showPredownloadPicker = ref(false)
+    const skipPickerForSingleFile = ref(true)
     // Feature 2: auto-skip files by extension (stored as comma-separated normalised lowercase)
     const blockedExtensions = ref<string[]>([])
     const lastPushedNativeExcludedExtensions = ref<string[]>([])
@@ -343,6 +344,7 @@ export const useVueTorrentStore = defineStore(
       logoutUrl,
       // Feature 1
       showPredownloadPicker,
+      skipPickerForSingleFile,
       // Feature 2
       blockedExtensions,
       lastPushedNativeExcludedExtensions,
@@ -380,6 +382,7 @@ export const useVueTorrentStore = defineStore(
         defaultTorrentDetailTab.value = TorrentDetailTab.LAST_OPENED
         tableColumnWidths.value = {}
         showPredownloadPicker.value = false
+        skipPickerForSingleFile.value = true
         blockedExtensions.value = []
         lastPushedNativeExcludedExtensions.value = []
         vueTorrentApiKey.value = ''

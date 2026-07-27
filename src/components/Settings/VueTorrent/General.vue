@@ -375,9 +375,9 @@ function openDurationFormatHelp() {
           <h3>
             {{ t('settings.vuetorrent.general.currentVersion') }}
             <span v-if="!vueTorrentVersion">undefined</span>
-            <a v-else-if="vueTorrentVersion === 'DEV'" target="_blank" href="https://github.com/VueTorrent/VueTorrent">{{ vueTorrentVersion }}</a>
-            <a v-else-if="isStableVersion" target="_blank" href="https://github.com/VueTorrent/VueTorrent/releases/latest">{{ vueTorrentVersion }}</a>
-            <a v-else target="_blank" href="https://github.com/VueTorrent/VueTorrent/releases/tag/latest_nightly">{{ vueTorrentVersion }}</a>
+            <a v-else-if="vueTorrentVersion === 'DEV'" target="_blank" href="https://github.com/jt-ito/VueTorrent-NX">{{ vueTorrentVersion }}</a>
+            <a v-else-if="isStableVersion" target="_blank" href="https://github.com/jt-ito/VueTorrent-NX/releases/latest">{{ vueTorrentVersion }}</a>
+            <a v-else target="_blank" href="https://github.com/jt-ito/VueTorrent-NX/releases/tag/latest_nightly">{{ vueTorrentVersion }}</a>
           </h3>
         </v-col>
 
@@ -460,7 +460,7 @@ function openDurationFormatHelp() {
             class="mb-3 text-caption">
             {{ t('settings.vuetorrent.general.torrent_adding.blocked_ext_native_note') }}
             <div class="mt-2 text-grey">
-              Note: The native feature has known upstream bugs where it's silently ignored for magnet links, RSS-added torrents, and WebUI-added torrents in some versions (see issues 
+              Note: Through testing, this native feature seems to be working, but just be aware it has known upstream bugs where it's silently ignored for magnet links, RSS-added torrents, and WebUI-added torrents in some versions (see issues 
               <a href="https://github.com/qbittorrent/qBittorrent/issues/21508" target="_blank" class="text-decoration-underline">#21508</a>,
               <a href="https://github.com/qbittorrent/qBittorrent/issues/21624" target="_blank" class="text-decoration-underline">#21624</a>,
               <a href="https://github.com/qbittorrent/qBittorrent/issues/24235" target="_blank" class="text-decoration-underline">#24235</a>). 

@@ -6,8 +6,11 @@ import AddTorrentParamsForm from './AddTorrentParamsForm.vue'
 import HistoryField from '@/components/Core/HistoryField.vue'
 import { useDialog, useI18nUtils } from '@/composables'
 import { HistoryKey } from '@/constants/vuetorrent'
-import { useAddTorrentStore, useAppStore, useDialogStore, useTorrentStore, useVueTorrentStore } from '@/stores'
+import { useAddTorrentStore, useAppStore, useDialogStore, useTorrentStore, useVueTorrentStore, usePreferenceStore } from '@/stores'
 import { AddTorrentPayload } from '@/types/qbit/payloads'
+import qbit from '@/services/qbit'
+import { getBlockedFileIds } from '@/stores/addTorrents'
+import { globToExtension } from '@/utils/helpers'
 
 const props = withDefaults(
   defineProps<{
@@ -86,6 +89,28 @@ async function submit() {
     if (!hashOrNull) {
       toast.error(t('toast.add.error', torrentsCount))
       return
+    }
+
+    if (!isMagnet) {
+      const torrentFilesList = await qbit.getTorrentFiles(hashOrNull)
+      const preferenceStore = usePreferenceStore()
+      const nativeGlobs = preferenceStore.preferences?.excluded_file_names_enabled 
+        ? (preferenceStore.preferences?.excluded_file_names || '').split('\n').filter(Boolean)
+        : []
+      const nativeExts = nativeGlobs.map(globToExtension).filter(Boolean) as string[]
+      const allBlockedExts = [...vueTorrentStore.blockedExtensions, ...nativeExts]
+      
+      const blockedIds = getBlockedFileIds(torrentFilesList, allBlockedExts)
+      if (torrentFilesList.length <= 1 && blockedIds.length === 0) {
+        await qbit.removeTorrentTag([hashOrNull], ['vt-predownload'])
+        await addTorrentStore.resumeTorrent(hashOrNull)
+        
+        cookieField.value?.saveValueToHistory()
+        addTorrentParamsForm.value?.saveFields()
+        addTorrentStore.resetForm()
+        close()
+        return
+      }
     }
 
     const { default: PredownloadFilesDialog } = await import('@/components/Dialogs/PredownloadFilesDialog.vue')

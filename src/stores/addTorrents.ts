@@ -149,11 +149,12 @@ export const useAddTorrentStore = defineStore(
       const existingHashes = new Set(existing.map(t => t.infohash_v1 || '').filter(Boolean))
 
       // 3. Send add with stopped + MetadataReceived stop-condition (or paused fallback)
+      const isMagnet = torrentFiles.length === 0
       const stoppedPayload: AddTorrentPayload = {
         ...payload,
-        stopped: true,
-        paused: true,
-        stopCondition: appStore.isFeatureAvailable('4.5.0') ? StopCondition.METADATA_RECEIVED : undefined,
+        stopped: isMagnet ? false : true,
+        paused: isMagnet ? false : true,
+        stopCondition: appStore.isFeatureAvailable('4.5.0') && isMagnet ? StopCondition.METADATA_RECEIVED : undefined,
         tags: payload.tags ? `${payload.tags},vt-predownload` : 'vt-predownload', // Tag for cleanup
       }
       await qbit.addTorrents(torrentFiles, torrentUrls, stoppedPayload)

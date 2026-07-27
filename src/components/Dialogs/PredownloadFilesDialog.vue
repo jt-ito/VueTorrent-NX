@@ -5,7 +5,7 @@ import { useDialog, useI18nUtils } from '@/composables'
 import { useTreeBuilder } from '@/composables'
 import { FilePriority } from '@/constants/qbit'
 import qbit from '@/services/qbit'
-import { useAddTorrentStore, useVueTorrentStore, usePreferenceStore } from '@/stores'
+import { useAddTorrentStore, useVueTorrentStore, usePreferenceStore, useTorrentStore } from '@/stores'
 import { TorrentFile } from '@/types/qbit/models'
 import { AddTorrentPayload } from '@/types/qbit/payloads'
 import { TreeNode } from '@/types/vuetorrent'
@@ -29,6 +29,7 @@ const { t } = useI18nUtils()
 const addTorrentStore = useAddTorrentStore()
 const vuetorrentStore = useVueTorrentStore()
 const preferenceStore = usePreferenceStore()
+const torrentStore = useTorrentStore()
 
 // ─── State machine ───────────────────────────────────────────────────────────
 type Step = 'waiting_metadata' | 'picking' | 'applying' | 'done' | 'error' | 'timeout'
@@ -124,6 +125,7 @@ async function pollMetadata() {
     step.value = 'timeout'
     return
   }
+  await torrentStore.pauseTorrents([props.hash])
   await loadFiles()
 }
 

@@ -6,6 +6,7 @@ import AddTorrentParamsForm from './AddTorrentParamsForm.vue'
 import HistoryField from '@/components/Core/HistoryField.vue'
 import { useDialog, useI18nUtils } from '@/composables'
 import { HistoryKey } from '@/constants/vuetorrent'
+import { StopCondition } from '@/constants/qbit/AppPreferences'
 import { useAddTorrentStore, useAppStore, useDialogStore, useTorrentStore, useVueTorrentStore, usePreferenceStore } from '@/stores'
 import { AddTorrentPayload } from '@/types/qbit/payloads'
 import qbit from '@/services/qbit'
@@ -129,7 +130,7 @@ async function submit() {
   }
 
   // ── Feature 2: Silent extension blocklist (no picker) ─────────────────────
-  if (vueTorrentStore.blockedExtensions.length > 0) {
+  if (vueTorrentStore.blockedExtensions.length > 0 && torrentsCount === 1) {
     void toast
       .promise(
         addTorrentStore.addTorrentWithBlocklist(torrentFiles, torrentUrls, payload),
@@ -150,9 +151,14 @@ async function submit() {
   }
 
   // ── Default: add normally ─────────────────────────────────────────────────
+  // For batch adds when picker is enabled, clear the stop condition so magnets
+  // don't pause after metadata. The background sync will apply the blocklist.
+  const finalPayload = (torrentsCount > 1 && vueTorrentStore.showPredownloadPicker)
+    ? { ...payload, stopCondition: StopCondition.NONE }
+    : payload
   void toast
     .promise(
-      torrentStore.addTorrents(torrentFiles, torrentUrls, payload),
+      torrentStore.addTorrents(torrentFiles, torrentUrls, finalPayload),
       {
         pending: t('toast.add.pending'),
         error: t('toast.add.error', torrentsCount),

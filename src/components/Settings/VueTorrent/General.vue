@@ -62,28 +62,6 @@ function removeExtension(ext: string) {
   vueTorrentStore.syncNativeBlocklist()
 }
 
-async function enableNativeExclusion() {
-  if (!preferenceStore.preferences) return
-  try {
-    await qbit.setPreferences({ excluded_file_names_enabled: true })
-    preferenceStore.preferences.excluded_file_names_enabled = true
-    toast.success('Native exclusions enabled')
-  } catch (e) {
-    toast.error('Failed to enable native exclusions')
-  }
-}
-
-async function disableNativeExclusion() {
-  if (!preferenceStore.preferences) return
-  try {
-    await qbit.setPreferences({ excluded_file_names_enabled: false })
-    preferenceStore.preferences.excluded_file_names_enabled = false
-    toast.success('Native exclusions disabled')
-  } catch (e) {
-    toast.error('Failed to disable native exclusions')
-  }
-}
-
 const github = new Github()
 
 const torrentDetailTabs = readonly([
@@ -476,10 +454,6 @@ function openDurationFormatHelp() {
               <a href="https://github.com/qbittorrent/qBittorrent/issues/21624" target="_blank" class="text-decoration-underline">#21624</a>,
               <a href="https://github.com/qbittorrent/qBittorrent/issues/24235" target="_blank" class="text-decoration-underline">#24235</a>). 
               VueTorrent's own client-side filtering (which requires a tab to be open) remains the primary and reliable mechanism.
-            </div>
-            <div v-if="preferenceStore.preferences" class="mt-2">
-              <v-btn v-if="!preferenceStore.preferences.excluded_file_names_enabled" size="small" color="primary" @click="enableNativeExclusion">Enable native exclusion</v-btn>
-              <v-btn v-else size="small" color="error" variant="tonal" @click="disableNativeExclusion">Disable native exclusion</v-btn>
             </div>
           </v-alert>
           <!-- Chip list of current extensions -->

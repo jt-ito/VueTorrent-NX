@@ -5,7 +5,7 @@ import { useDialog, useI18nUtils } from '@/composables'
 import { useTreeBuilder } from '@/composables'
 import { FilePriority } from '@/constants/qbit'
 import qbit from '@/services/qbit'
-import { useAddTorrentStore, useVueTorrentStore, usePreferenceStore, useTorrentStore } from '@/stores'
+import { useAddTorrentStore, useVueTorrentStore, usePreferenceStore, useTorrentStore, useDialogStore } from '@/stores'
 import { TorrentFile } from '@/types/qbit/models'
 import { AddTorrentPayload } from '@/types/qbit/payloads'
 import { TreeNode } from '@/types/vuetorrent'
@@ -30,6 +30,7 @@ const addTorrentStore = useAddTorrentStore()
 const vuetorrentStore = useVueTorrentStore()
 const preferenceStore = usePreferenceStore()
 const torrentStore = useTorrentStore()
+const dialogStore = useDialogStore()
 
 // ─── State machine ───────────────────────────────────────────────────────────
 type Step = 'waiting_metadata' | 'picking' | 'applying' | 'done' | 'error' | 'timeout'
@@ -49,12 +50,13 @@ const deselectedIds = shallowRef<Set<number>>(new Set())
 
 // Toggle handler from PickerNode
 function onToggle(ids: number[], wanted: boolean) {
+  const newSet = new Set(deselectedIds.value)
   if (wanted) {
-    ids.forEach(id => deselectedIds.value.delete(id))
+    ids.forEach(id => newSet.delete(id))
   } else {
-    ids.forEach(id => deselectedIds.value.add(id))
+    ids.forEach(id => newSet.add(id))
   }
-  triggerRef(deselectedIds)
+  deselectedIds.value = newSet
 }
 
 function selectAll() {
@@ -111,6 +113,32 @@ async function loadFiles() {
   step.value = 'picking'
 }
 
+async function onRename(node: TreeNode) {
+  const { default: MoveTorrentFileDialog } = await import('@/components/Dialogs/MoveTorrentFileDialog.vue')
+  dialogStore.createDialog(
+    MoveTorrentFileDialog,
+    {
+      hash: props.hash,
+      isFolder: node.type === 'folder',
+      oldName: node.fullName,
+    },
+    async () => {
+      // Reload files after rename (poll since qBittorrent can be slow to update stopped torrents)
+      const oldFilesStr = JSON.stringify(files.value.map(f => f.name))
+      for (let i = 0; i < 15; i++) {
+        const torrentFiles = await qbit.getTorrentFiles(props.hash)
+        const newFilesStr = JSON.stringify(torrentFiles.map(f => f.name))
+        if (newFilesStr !== oldFilesStr) {
+          files.value = torrentFiles
+          expandAll()
+          break
+        }
+        await new Promise(r => setTimeout(r, 200))
+      }
+    }
+  )
+}
+
 // ─── Metadata polling (magnets only) ─────────────────────────────────────────
 async function pollMetadata() {
   const ok = await addTorrentStore.waitForMetadata(
@@ -136,6 +164,12 @@ async function confirm() {
     const ids = Array.from(deselectedIds.value)
     if (ids.length > 0) {
       await qbit.setTorrentFilePriority(props.hash, ids, FilePriority.DO_NOT_DOWNLOAD)
+    }
+
+    // Explicitly set priority for selected files to ensure renamed files aren't dropped
+    const selectedIds = files.value.map(f => f.index).filter(id => !deselectedIds.value.has(id))
+    if (selectedIds.length > 0) {
+      await qbit.setTorrentFilePriority(props.hash, selectedIds, FilePriority.NORMAL)
     }
     // Remove the cleanup tag before resuming
     await qbit.removeTorrentTag([props.hash], ['vt-predownload'])
@@ -228,9 +262,9 @@ onBeforeUnmount(() => {
           </div>
 
           <!-- File tree -->
-          <v-virtual-scroll :items="flatTree" item-height="60" max-height="420">
+          <v-virtual-scroll :items="flatTree" item-height="60" max-height="420" class="overflow-x-auto">
             <template #default="{ item }">
-              <PickerNode :node="(item as TreeNode)" :deselected-ids="deselectedIds" @toggle="onToggle" />
+              <PickerNode :node="(item as TreeNode)" :deselected-ids="deselectedIds" @toggle="onToggle" @rename="onRename" />
             </template>
           </v-virtual-scroll>
         </div>

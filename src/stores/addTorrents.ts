@@ -270,6 +270,7 @@ export const useAddTorrentStore = defineStore(
 
       const files = await qbit.getTorrentFiles(hash)
       await applyExtensionBlocklist(hash, files)
+      await qbit.removeTorrentTag([hash], ['vt-predownload'])
       await resumeTorrent(hash)
     }
 

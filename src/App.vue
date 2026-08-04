@@ -118,6 +118,7 @@ watch(
       maindataStore.resumeKeepAlive()
       addTorrentStore.cleanupOrphanedTorrents()
       await preferencesStore.fetchPreferences()
+      vuetorrentStore.importNativeBlocklist()
       void vuetorrentStore.syncNativeBlocklist()
       await logStore.cleanAndFetchLogs()
 

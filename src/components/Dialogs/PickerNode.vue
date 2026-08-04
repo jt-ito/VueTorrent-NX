@@ -12,6 +12,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   toggle: [ids: number[], wanted: boolean]
+  rename: [node: TreeNode]
 }>()
 
 const folderColor = '#ffe476'
@@ -80,10 +81,14 @@ function getSubtitle() {
       </div>
 
       <!-- Name + subtitle -->
-      <div class="d-flex flex-column overflow-hidden text-no-wrap ml-3">
-        <div>{{ node.name }}</div>
+      <div class="d-flex flex-column text-no-wrap ml-3">
+        <div :title="node.name">{{ node.name }}</div>
         <div class="text-grey text-caption">{{ getSubtitle() }}</div>
       </div>
+
+      <v-spacer />
+
+      <v-btn icon="mdi-pencil" size="small" variant="text" color="grey" @click.stop="$emit('rename', node)" />
     </div>
   </div>
 </template>

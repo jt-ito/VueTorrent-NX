@@ -16,9 +16,10 @@ import {
   TorrentDetailTab,
   TorrentProperty,
 } from '@/constants/vuetorrent'
+import { AppPreferences } from '@/types/qbit/models'
 import { DarkLegacy, LightLegacy } from '@/themes'
 import { usePreferenceStore } from '@/stores'
-import { reconcileNativeExcludedFiles } from '@/utils/helpers'
+import { reconcileNativeExcludedFiles, globToExtension, normalizeExtension } from '@/utils/helpers'
 import qbit from '@/services/qbit'
 import { toast } from 'vue3-toastify'
 
@@ -263,6 +264,35 @@ export const useVueTorrentStore = defineStore(
       _tableProperties.value[name].active = !_tableProperties.value[name].active
     }
 
+    function importNativeBlocklist() {
+      if (!preferenceStore.preferences) return
+      const nativeGlobsStr = preferenceStore.preferences.excluded_file_names || ''
+      if (!nativeGlobsStr.trim()) return
+
+      const nativeGlobs = nativeGlobsStr
+        .split('\n')
+        .map(s => s.trim())
+        .filter(s => s)
+
+      const pushedSet = new Set(lastPushedNativeExcludedExtensions.value)
+
+      for (const glob of nativeGlobs) {
+        const ext = globToExtension(glob)
+        if (ext) {
+          const normalized = normalizeExtension(ext)
+          if (normalized && !blockedExtensions.value.includes(normalized)) {
+            blockedExtensions.value.push(normalized)
+          }
+          // Mark as pushed so we can manage it
+          pushedSet.add(glob)
+        }
+      }
+
+      if (pushedSet.size !== lastPushedNativeExcludedExtensions.value.length) {
+        lastPushedNativeExcludedExtensions.value = Array.from(pushedSet)
+      }
+    }
+
     async function syncNativeBlocklist() {
       if (!preferenceStore.preferences) return
 
@@ -272,11 +302,32 @@ export const useVueTorrentStore = defineStore(
         blockedExtensions.value
       )
 
+      const shouldBeEnabled = blockedExtensions.value.length > 0
+      const isCurrentlyEnabled = preferenceStore.preferences.excluded_file_names_enabled
+
+      const prefsToUpdate: Partial<AppPreferences> = {}
+      let needsUpdate = false
+
       if (finalGlobsStr !== (preferenceStore.preferences.excluded_file_names || '')) {
+        prefsToUpdate.excluded_file_names = finalGlobsStr
+        needsUpdate = true
+      }
+
+      if (shouldBeEnabled !== isCurrentlyEnabled) {
+        prefsToUpdate.excluded_file_names_enabled = shouldBeEnabled
+        needsUpdate = true
+      }
+
+      if (needsUpdate) {
         try {
-          await qbit.setPreferences({ excluded_file_names: finalGlobsStr })
-          preferenceStore.preferences.excluded_file_names = finalGlobsStr
-          lastPushedNativeExcludedExtensions.value = [...newPushedGlobs]
+          await qbit.setPreferences(prefsToUpdate)
+          if (prefsToUpdate.excluded_file_names !== undefined) {
+             preferenceStore.preferences.excluded_file_names = finalGlobsStr
+             lastPushedNativeExcludedExtensions.value = [...newPushedGlobs]
+          }
+          if (prefsToUpdate.excluded_file_names_enabled !== undefined) {
+             preferenceStore.preferences.excluded_file_names_enabled = shouldBeEnabled
+          }
         } catch (e) {
           toast.warn('Failed to sync native excluded file names')
         }
@@ -349,6 +400,7 @@ export const useVueTorrentStore = defineStore(
       blockedExtensions,
       lastPushedNativeExcludedExtensions,
       syncNativeBlocklist,
+      importNativeBlocklist,
       // Feature 3
       vueTorrentApiKey,
       keepAliveEnabled,

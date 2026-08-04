@@ -63,6 +63,12 @@ function getSubtitle() {
     class="d-flex flex-column py-2 pr-3"
     :style="`padding-left: ${depth}px`">
     <div class="d-flex align-center">
+      <v-tooltip text="Rename">
+        <template v-slot:activator="{ props }">
+          <v-btn v-bind="props" class="mr-2" icon="mdi-pencil" size="small" variant="text" color="grey" @click.stop="$emit('rename', node)" />
+        </template>
+      </v-tooltip>
+
       <!-- Checkbox -->
       <div class="d-flex align-center cursor-pointer" @click.stop="toggle">
         <v-icon v-if="allWanted" color="accent" icon="mdi-checkbox-marked" />
@@ -85,10 +91,6 @@ function getSubtitle() {
         <div :title="node.name">{{ node.name }}</div>
         <div class="text-grey text-caption">{{ getSubtitle() }}</div>
       </div>
-
-      <v-spacer />
-
-      <v-btn icon="mdi-pencil" size="small" variant="text" color="grey" @click.stop="$emit('rename', node)" />
     </div>
   </div>
 </template>

@@ -262,7 +262,7 @@ onBeforeUnmount(() => {
           </div>
 
           <!-- File tree -->
-          <v-virtual-scroll :items="flatTree" item-height="60" max-height="420" class="overflow-x-auto">
+          <v-virtual-scroll :items="flatTree" item-height="60" max-height="420" class="overflow-x-auto thin-scrollbar">
             <template #default="{ item }">
               <PickerNode :node="(item as TreeNode)" :deselected-ids="deselectedIds" @toggle="onToggle" @rename="onRename" />
             </template>
@@ -316,3 +316,19 @@ onBeforeUnmount(() => {
     </v-card>
   </v-dialog>
 </template>
+
+<style scoped>
+.thin-scrollbar::-webkit-scrollbar {
+  height: 6px;
+}
+.thin-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.thin-scrollbar::-webkit-scrollbar-thumb {
+  background-color: rgba(128, 128, 128, 0.4);
+  border-radius: 4px;
+}
+.thin-scrollbar::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(128, 128, 128, 0.6);
+}
+</style>

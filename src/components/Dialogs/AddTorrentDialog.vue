@@ -102,15 +102,26 @@ async function submit() {
       const allBlockedExts = [...vueTorrentStore.blockedExtensions, ...nativeExts]
       
       const blockedIds = getBlockedFileIds(torrentFilesList, allBlockedExts)
-      if (vueTorrentStore.skipPickerForSingleFile && torrentFilesList.length <= 1 && blockedIds.length === 0) {
-        await qbit.removeTorrentTag([hashOrNull], ['vt-predownload'])
-        await addTorrentStore.resumeTorrent(hashOrNull)
-        
-        cookieField.value?.saveValueToHistory()
-        addTorrentParamsForm.value?.saveFields()
-        addTorrentStore.resetForm()
-        close()
-        return
+      if (vueTorrentStore.skipPickerForSingleFile && torrentFilesList.length <= 1) {
+        if (blockedIds.length === 1) {
+          await qbit.deleteTorrents([hashOrNull], true)
+          const { default: SingleFileSkippedDialog } = await import('@/components/Dialogs/SingleFileSkippedDialog.vue')
+          dialogStore.createDialog(SingleFileSkippedDialog, { filename: torrentFilesList[0].name })
+          cookieField.value?.saveValueToHistory()
+          addTorrentParamsForm.value?.saveFields()
+          addTorrentStore.resetForm()
+          close()
+          return
+        } else if (blockedIds.length === 0) {
+          await qbit.removeTorrentTag([hashOrNull], ['vt-predownload'])
+          await addTorrentStore.resumeTorrent(hashOrNull)
+          
+          cookieField.value?.saveValueToHistory()
+          addTorrentParamsForm.value?.saveFields()
+          addTorrentStore.resetForm()
+          close()
+          return
+        }
       }
     }
 

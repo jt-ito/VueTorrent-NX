@@ -105,9 +105,17 @@ async function loadFiles() {
   expandAll()
 
   // Skip picker if it's a single file and not blocked
-  if (vuetorrentStore.skipPickerForSingleFile && torrentFiles.length <= 1 && blockedIds.length === 0) {
-    void confirm()
-    return
+  if (vuetorrentStore.skipPickerForSingleFile && torrentFiles.length <= 1) {
+    if (blockedIds.length === 1) {
+      await qbit.deleteTorrents([props.hash], true)
+      const { default: SingleFileSkippedDialog } = await import('@/components/Dialogs/SingleFileSkippedDialog.vue')
+      dialogStore.createDialog(SingleFileSkippedDialog, { filename: torrentFiles[0].name })
+      close()
+      return
+    } else if (blockedIds.length === 0) {
+      void confirm()
+      return
+    }
   }
 
   step.value = 'picking'
@@ -223,7 +231,7 @@ onBeforeUnmount(() => {
 <template>
   <v-dialog
     v-model="isOpened"
-    :max-width="800"
+    :width="$vuetify.display.mobile ? undefined : '65%'"
     :fullscreen="$vuetify.display.mobile"
     scrollable
     :transition="openSuddenly ? 'none' : 'dialog-bottom-transition'"
@@ -262,7 +270,7 @@ onBeforeUnmount(() => {
           </div>
 
           <!-- File tree -->
-          <v-virtual-scroll :items="flatTree" item-height="60" max-height="420" class="overflow-x-auto thin-scrollbar">
+          <v-virtual-scroll :items="flatTree" item-height="60" style="min-height: 400px; max-height: 70vh;" class="overflow-x-auto thin-scrollbar">
             <template #default="{ item }">
               <PickerNode :node="(item as TreeNode)" :deselected-ids="deselectedIds" @toggle="onToggle" @rename="onRename" />
             </template>

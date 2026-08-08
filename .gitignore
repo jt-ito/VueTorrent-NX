@@ -35,3 +35,5 @@ config/
 *.zip
 test_torrents/
 
+
+e2e_scripts/

@@ -3,6 +3,7 @@ import { computed, reactive, ref, shallowRef, watch } from 'vue'
 import { useAppStore } from './app'
 import { usePreferenceStore } from './preferences'
 import { useVueTorrentStore } from './vuetorrent'
+import { useDialogStore } from './dialog'
 import { extractMagnetHash } from '@/utils/helpers'
 import { FilePriority, FilterState } from '@/constants/qbit'
 import { StopCondition } from '@/constants/qbit/AppPreferences'
@@ -269,6 +270,16 @@ export const useAddTorrentStore = defineStore(
       if (!ready) return
 
       const files = await qbit.getTorrentFiles(hash)
+      if (vueTorrentStore.skipPickerForSingleFile && files.length === 1) {
+        const blocked = getBlockedFileIds(files, vueTorrentStore.blockedExtensions)
+        if (blocked.length === 1) {
+          await qbit.deleteTorrents([hash], true)
+          const { default: SingleFileSkippedDialog } = await import('@/components/Dialogs/SingleFileSkippedDialog.vue')
+          const dialogStore = useDialogStore()
+          dialogStore.createDialog(SingleFileSkippedDialog, { filename: files[0].name })
+          return
+        }
+      }
       await applyExtensionBlocklist(hash, files)
       await qbit.removeTorrentTag([hash], ['vt-predownload'])
       await resumeTorrent(hash)
@@ -291,6 +302,16 @@ export const useAddTorrentStore = defineStore(
       if (!ready) return
 
       const files = await qbit.getTorrentFiles(hash)
+      if (vueTorrentStore.skipPickerForSingleFile && files.length === 1) {
+        const blocked = getBlockedFileIds(files, vueTorrentStore.blockedExtensions)
+        if (blocked.length === 1) {
+          await qbit.deleteTorrents([hash], true)
+          const { default: SingleFileSkippedDialog } = await import('@/components/Dialogs/SingleFileSkippedDialog.vue')
+          const dialogStore = useDialogStore()
+          dialogStore.createDialog(SingleFileSkippedDialog, { filename: files[0].name })
+          return
+        }
+      }
       await applyExtensionBlocklist(hash, files)
     }
 

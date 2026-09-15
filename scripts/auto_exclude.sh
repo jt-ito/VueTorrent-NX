@@ -14,6 +14,7 @@
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 LOG_FILE="${QBITTORRENT_LOG_FILE:-$SCRIPT_DIR/auto_exclude.log}"
+FALLBACK_LOG="/tmp/auto_exclude.log"
 MAX_LOG_SIZE=5242880 # 5 MB
 
 log() {
@@ -22,16 +23,17 @@ log() {
   LOG_MSG="[$TIMESTAMP] [$LEVEL] [VueTorrent Auto-Exclude] $1"
   echo "$LOG_MSG"
   
-  if [ -n "$LOG_FILE" ]; then
-    # Rotate if log exceeds 5MB
-    if [ -f "$LOG_FILE" ]; then
-      FILE_SIZE=$(wc -c < "$LOG_FILE" 2>/dev/null || stat -c %s "$LOG_FILE" 2>/dev/null || echo 0)
-      if [ "$FILE_SIZE" -gt "$MAX_LOG_SIZE" ]; then
-        tail -c 1048576 "$LOG_FILE" > "$LOG_FILE.tmp" 2>/dev/null && mv "$LOG_FILE.tmp" "$LOG_FILE" 2>/dev/null || true
+  for target in "$LOG_FILE" "$FALLBACK_LOG"; do
+    if [ -n "$target" ]; then
+      if [ -f "$target" ]; then
+        FILE_SIZE=$(wc -c < "$target" 2>/dev/null || stat -c %s "$target" 2>/dev/null || echo 0)
+        if [ "$FILE_SIZE" -gt "$MAX_LOG_SIZE" ]; then
+          tail -c 1048576 "$target" > "$target.tmp" 2>/dev/null && mv "$target.tmp" "$target" 2>/dev/null || true
+        fi
       fi
+      echo "$LOG_MSG" >> "$target" 2>/dev/null || true
     fi
-    echo "$LOG_MSG" >> "$LOG_FILE" 2>/dev/null || true
-  fi
+  done
 }
 
 HASH="$1"
@@ -85,14 +87,24 @@ if [ -n "$QBITTORRENT_USER" ]; then
   chmod 600 "$COOKIE_FILE" 2>/dev/null || true
   trap 'rm -f "$COOKIE_FILE"' EXIT INT TERM
 
-  curl -s -c "$COOKIE_FILE" -X POST \
+  curl -k -s -c "$COOKIE_FILE" -X POST \
     -d "username=$QBITTORRENT_USER&password=$QBITTORRENT_PASS" \
     "$URL/api/v2/auth/login" >/dev/null 2>&1
   AUTH_ARGS="-b $COOKIE_FILE"
 fi
 
 # Fetch preferences to extract excluded_file_names
-PREFS=$(curl -s $AUTH_ARGS "$URL/api/v2/app/preferences" 2>/dev/null || true)
+PREFS=$(curl -k -s -H "Referer: $URL" $AUTH_ARGS "$URL/api/v2/app/preferences" 2>/dev/null || true)
+if [ -z "$PREFS" ] && echo "$URL" | grep -q '^http://'; then
+  ALT_URL="https://${URL#http://}"
+  ALT_PREFS=$(curl -k -s -H "Referer: $ALT_URL" $AUTH_ARGS "$ALT_URL/api/v2/app/preferences" 2>/dev/null || true)
+  if [ -n "$ALT_PREFS" ]; then
+    URL="$ALT_URL"
+    PREFS="$ALT_PREFS"
+    log "Switched to HTTPS fallback: $URL"
+  fi
+fi
+
 if [ -z "$PREFS" ]; then
   log "Failed to connect to qBittorrent at $URL" "ERROR"
   exit 1
@@ -127,7 +139,7 @@ ATTEMPT=0
 FILES=""
 
 while [ $ATTEMPT -lt $MAX_ATTEMPTS ]; do
-  FILES=$(curl -s $AUTH_ARGS "$URL/api/v2/torrents/files?hash=$HASH" 2>/dev/null || true)
+  FILES=$(curl -k -s -H "Referer: $URL" $AUTH_ARGS "$URL/api/v2/torrents/files?hash=$HASH" 2>/dev/null || true)
   if echo "$FILES" | grep -q '"name":'; then
     break
   fi
@@ -173,7 +185,7 @@ BEGIN {
 # Validate that MATCHED_IDS contains only integer IDs separated by pipes
 if [ -n "$MATCHED_IDS" ] && echo "$MATCHED_IDS" | grep -Eq '^[0-9]+(\|[0-9]+)*$'; then
   log "Applying DO_NOT_DOWNLOAD (priority 0) to indices: $MATCHED_IDS"
-  curl -s $AUTH_ARGS -X POST \
+  curl -k -s -H "Referer: $URL" $AUTH_ARGS -X POST \
     -d "hash=$HASH&id=$MATCHED_IDS&priority=0" \
     "$URL/api/v2/torrents/filePrio" >/dev/null 2>&1
   log "Successfully updated file priorities."

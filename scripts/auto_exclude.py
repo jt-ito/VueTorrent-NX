@@ -27,6 +27,7 @@ import os
 import re
 import sys
 import time
+import ssl
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -35,6 +36,7 @@ LOG_FILE_PATH = os.environ.get(
     "QBITTORRENT_LOG_FILE",
     os.path.join(os.path.dirname(os.path.abspath(__file__)), "auto_exclude.log"),
 )
+FALLBACK_LOG_PATH = "/tmp/auto_exclude.log"
 MAX_LOG_SIZE_BYTES = 5 * 1024 * 1024  # 5 MB log cap
 
 
@@ -43,18 +45,22 @@ def log(msg: str, level: str = "INFO"):
     formatted = f"[{timestamp}] [{level}] [VueTorrent Auto-Exclude] {msg}"
     print(formatted, flush=True)
 
-    try:
-        if os.path.exists(LOG_FILE_PATH) and os.path.getsize(LOG_FILE_PATH) > MAX_LOG_SIZE_BYTES:
-            # Rotate by keeping the last 1MB
-            with open(LOG_FILE_PATH, "r", encoding="utf-8", errors="ignore") as f:
-                content = f.read()
-            with open(LOG_FILE_PATH, "w", encoding="utf-8") as f:
-                f.write(content[-1024 * 1024 :])
+    targets = [LOG_FILE_PATH]
+    if os.path.isdir("/tmp") and os.path.abspath(LOG_FILE_PATH) != os.path.abspath(FALLBACK_LOG_PATH):
+        targets.append(FALLBACK_LOG_PATH)
 
-        with open(LOG_FILE_PATH, "a", encoding="utf-8") as f:
-            f.write(formatted + "\n")
-    except Exception:
-        pass
+    for target in targets:
+        try:
+            if os.path.exists(target) and os.path.getsize(target) > MAX_LOG_SIZE_BYTES:
+                with open(target, "r", encoding="utf-8", errors="ignore") as f:
+                    content = f.read()
+                with open(target, "w", encoding="utf-8") as f:
+                    f.write(content[-1024 * 1024 :])
+
+            with open(target, "a", encoding="utf-8") as f:
+                f.write(formatted + "\n")
+        except Exception:
+            pass
 
 
 def validate_hash(torrent_hash: str) -> bool:
@@ -89,6 +95,35 @@ def normalize_pattern(pattern: str) -> str:
     return cleaned
 
 
+def find_qbit_conf_info() -> dict:
+    """Inspects standard qBittorrent config paths in Docker/Linux/macOS."""
+    candidates = [
+        "/config/qBittorrent/qBittorrent.conf",
+        "/config/qbittorrent/qBittorrent.conf",
+        "/config/qBittorrent.conf",
+        os.path.expanduser("~/.config/qBittorrent/qBittorrent.conf"),
+    ]
+    info = {"port": None, "https": False, "local_auth": None}
+    for path in candidates:
+        if os.path.isfile(path):
+            try:
+                with open(path, "r", encoding="utf-8", errors="ignore") as f:
+                    for line in f:
+                        line_s = line.strip()
+                        lower = line_s.lower()
+                        if lower.startswith("webui\\port="):
+                            info["port"] = int(line_s.split("=", 1)[1].strip())
+                        elif lower.startswith("webui\\https\\enabled="):
+                            info["https"] = line_s.split("=", 1)[1].strip().lower() in ("true", "1")
+                        elif lower.startswith("webui\\localhostauth="):
+                            info["local_auth"] = line_s.split("=", 1)[1].strip().lower() in ("true", "1")
+                if info["port"] is not None or info["local_auth"] is not None:
+                    break
+            except Exception:
+                pass
+    return info
+
+
 class QbitClient:
     def __init__(self, base_url: str, username: str = "", password: str = "", debug: bool = False):
         self.base_url = base_url.rstrip("/")
@@ -97,7 +132,18 @@ class QbitClient:
         self.debug = debug
 
         self.cookie_jar = http.cookiejar.CookieJar()
-        self.opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(self.cookie_jar))
+        handlers = [urllib.request.HTTPCookieProcessor(self.cookie_jar)]
+
+        # Allow unverified HTTPS for localhost/Docker self-signed certificates
+        try:
+            ssl_ctx = ssl.create_default_context()
+            ssl_ctx.check_hostname = False
+            ssl_ctx.verify_mode = ssl.CERT_NONE
+            handlers.append(urllib.request.HTTPSHandler(context=ssl_ctx))
+        except Exception:
+            pass
+
+        self.opener = urllib.request.build_opener(*handlers)
 
     def _request(self, path: str, data: dict = None, method: str = None) -> bytes:
         url = f"{self.base_url}{path}"
@@ -107,6 +153,8 @@ class QbitClient:
 
         req = urllib.request.Request(url, data=encoded_data, method=method)
         req.add_header("User-Agent", "VueTorrent-AutoExclude/1.0")
+        req.add_header("Referer", self.base_url)
+        req.add_header("Origin", self.base_url)
 
         try:
             with self.opener.open(req, timeout=15) as resp:
@@ -200,24 +248,52 @@ def process_torrent(
         log(f"Invalid qBittorrent WebUI URL rejected: '{base_url}'", level="ERROR")
         return False
 
-    client = QbitClient(base_url, username=username, password=password, debug=debug)
+    conf_info = find_qbit_conf_info()
+    candidate_urls = [base_url]
 
-    # 1. Fetch preferences to extract excluded file extensions
-    try:
-        prefs = client.get_preferences()
-    except urllib.error.HTTPError as e:
-        if e.code == 403:
-            log(
-                f"Authentication failed (HTTP 403) accessing {base_url}. "
-                "Please ensure 'Bypass authentication for clients on localhost' is enabled in qBittorrent WebUI settings, "
-                "or provide credentials via --username/--password or QBITTORRENT_USER/QBITTORRENT_PASS.",
-                level="ERROR",
-            )
-        else:
-            log(f"Failed to fetch qBittorrent preferences from {base_url}: {e}", level="ERROR")
-        return False
-    except Exception as e:
-        log(f"Failed to fetch qBittorrent preferences from {base_url}: {e}", level="ERROR")
+    # Generate smart fallbacks if targeting localhost
+    if "127.0.0.1" in base_url or "localhost" in base_url:
+        parsed = urllib.parse.urlparse(base_url)
+        alt_scheme = "https" if parsed.scheme == "http" else "http"
+        candidate_urls.append(f"{alt_scheme}://{parsed.netloc}")
+
+        if conf_info["port"] and str(conf_info["port"]) not in parsed.netloc:
+            scheme = "https" if conf_info["https"] else "http"
+            candidate_urls.append(f"{scheme}://127.0.0.1:{conf_info['port']}")
+
+    client = None
+    prefs = None
+    last_error = None
+
+    for target_url in candidate_urls:
+        candidate_client = QbitClient(target_url, username=username, password=password, debug=debug)
+        try:
+            prefs = candidate_client.get_preferences()
+            client = candidate_client
+            if target_url != base_url:
+                log(f"Successfully connected to qBittorrent using fallback URL: {target_url}")
+            break
+        except urllib.error.HTTPError as e:
+            last_error = e
+            if e.code == 403:
+                auth_hint = ""
+                if conf_info.get("local_auth") is True:
+                    auth_hint = " (Note: WebUI\\LocalHostAuth=true is set in qBittorrent.conf)"
+                log(
+                    f"Authentication failed (HTTP 403) accessing {target_url}. "
+                    "Please ensure 'Bypass authentication for clients on localhost' is enabled in qBittorrent WebUI settings, "
+                    f"or configure credentials via --username/--password.{auth_hint}",
+                    level="ERROR",
+                )
+                return False
+            break
+        except Exception as e:
+            last_error = e
+            if debug:
+                log(f"Connection attempt to {target_url} failed: {e}", level="DEBUG")
+
+    if not prefs or not client:
+        log(f"Failed to connect to qBittorrent at {base_url} (tried {', '.join(candidate_urls)}): {last_error}", level="ERROR")
         return False
 
     excluded_globs_str = prefs.get("excluded_file_names", "")

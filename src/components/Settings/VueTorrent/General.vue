@@ -49,9 +49,29 @@ const extensionInput = ref('')
 
 onMounted(() => {
   vueTorrentStore.initDraftBlockedExtensions()
+  if (
+    preferenceStore.preferences?.autorun_on_torrent_added_enabled &&
+    !preferenceStore.preferences?.autorun_on_torrent_added_program
+  ) {
+    applyRecommendedAutorun(false)
+  }
 })
 
-function applyRecommendedAutorun() {
+const backgroundHookEnabled = computed({
+  get() {
+    return !!preferenceStore.preferences?.autorun_on_torrent_added_enabled
+  },
+  set(val: boolean) {
+    if (!preferenceStore.preferences) return
+    if (val) {
+      applyRecommendedAutorun(false)
+    } else {
+      preferenceStore.preferences.autorun_on_torrent_added_enabled = false
+    }
+  },
+})
+
+function applyRecommendedAutorun(showToast = true) {
   if (!preferenceStore.preferences) return
   const cmd = vueTorrentStore.getRecommendedAutorunCommand(
     appStore.buildInfo?.platform,
@@ -59,7 +79,9 @@ function applyRecommendedAutorun() {
   )
   preferenceStore.preferences.autorun_on_torrent_added_enabled = true
   preferenceStore.preferences.autorun_on_torrent_added_program = cmd
-  toast.success(t('toast.apply.success'))
+  if (showToast) {
+    toast.success(t('toast.apply.success'))
+  }
 }
 
 async function copyAutorunCommand() {
@@ -539,52 +561,63 @@ function openDurationFormatHelp() {
             @keydown.enter.prevent="addExtension"
             @keydown.comma.prevent="addExtension" />
 
-          <!-- Background Auto-Exclusion Hook Section -->
+          <!-- Background Auto-Exclusion Section -->
           <v-card variant="outlined" class="mt-3 pa-3">
             <div class="d-flex align-center justify-space-between mb-1">
               <div class="text-subtitle-2 d-flex align-center">
                 <v-icon icon="mdi-auto-fix" size="small" class="mr-2" color="accent" />
-                Background Auto-Exclusion (qBittorrent Hook)
+                Background Auto-Exclusion
               </div>
               <v-chip
                 size="x-small"
-                :color="preferenceStore.preferences?.autorun_on_torrent_added_enabled ? 'success' : 'grey'"
+                :color="backgroundHookEnabled ? 'success' : 'grey'"
                 variant="flat">
-                {{ preferenceStore.preferences?.autorun_on_torrent_added_enabled ? 'Enabled' : 'Disabled' }}
+                {{ backgroundHookEnabled ? 'Active' : 'Disabled' }}
               </v-chip>
             </div>
             <div class="text-caption text-grey mb-3">
-              Automatically applies your file exclusions when VueTorrent is closed (e.g. magnet links, RSS feeds, or remote API additions). Runs natively with zero extra software required on Windows, Linux, macOS, and Docker.
+              Automatically deselects excluded files in the background when VueTorrent is closed (e.g. for magnet links, RSS feeds, or remote additions). VueTorrent manages and configures this automatically for your system.
             </div>
 
-            <v-checkbox
+            <v-switch
               v-if="preferenceStore.preferences"
-              v-model="preferenceStore.preferences.autorun_on_torrent_added_enabled"
+              v-model="backgroundHookEnabled"
+              color="accent"
               hide-details
               density="compact"
-              label="Run background exclusion hook on torrent added" />
+              label="Enable Background Auto-Exclusion" />
 
-            <div v-if="preferenceStore.preferences" class="mt-2">
-              <v-text-field
-                v-model="preferenceStore.preferences.autorun_on_torrent_added_program"
-                density="compact"
-                hide-details
-                label="Hook Program Command"
-                :disabled="!preferenceStore.preferences.autorun_on_torrent_added_enabled"
-                append-inner-icon="mdi-content-copy"
-                @click:append-inner="copyAutorunCommand" />
-              
-              <div class="d-flex ga-2 mt-2">
-                <v-btn
-                  size="small"
-                  variant="tonal"
-                  color="accent"
-                  prepend-icon="mdi-refresh"
-                  @click="applyRecommendedAutorun">
-                  Auto-Configure for {{ appStore.buildInfo?.platform || 'My OS' }}
-                </v-btn>
-              </div>
-            </div>
+            <v-expansion-panels v-if="preferenceStore.preferences" variant="accordion" class="mt-2">
+              <v-expansion-panel elevation="0">
+                <v-expansion-panel-title class="pa-2 text-caption text-grey">
+                  <v-icon icon="mdi-cog-outline" size="x-small" class="mr-1" />
+                  Advanced: View Background Hook Command
+                </v-expansion-panel-title>
+                <v-expansion-panel-text class="pa-2">
+                  <v-text-field
+                    v-model="preferenceStore.preferences.autorun_on_torrent_added_program"
+                    density="compact"
+                    hide-details
+                    label="Command executed by qBittorrent on torrent added"
+                    :disabled="!backgroundHookEnabled"
+                    append-inner-icon="mdi-content-copy"
+                    @click:append-inner="copyAutorunCommand" />
+                  <div class="d-flex align-center justify-space-between mt-2">
+                    <div class="text-caption text-grey">
+                      Auto-generated for {{ appStore.buildInfo?.platform || 'your system' }}.
+                    </div>
+                    <v-btn
+                      size="x-small"
+                      variant="tonal"
+                      color="accent"
+                      prepend-icon="mdi-refresh"
+                      @click="applyRecommendedAutorun(true)">
+                      Reset Command
+                    </v-btn>
+                  </div>
+                </v-expansion-panel-text>
+              </v-expansion-panel>
+            </v-expansion-panels>
           </v-card>
         </v-col>
 

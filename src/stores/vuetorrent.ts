@@ -131,7 +131,7 @@ export const useVueTorrentStore = defineStore(
         return `powershell.exe -ExecutionPolicy Bypass -File "${winPath}\\scripts\\auto_exclude.ps1" "%I" "${localUrl}"`
       } else {
         const unixPath = path.replace(/\\/g, '/')
-        return `sh "${unixPath}/scripts/auto_exclude.sh" "%I" "${localUrl}"`
+        return `/bin/sh "${unixPath}/scripts/auto_exclude.sh" "%I" "${localUrl}"`
       }
     }
 

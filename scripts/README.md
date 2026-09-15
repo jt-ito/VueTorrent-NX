@@ -25,12 +25,12 @@ Check **Run external program on torrent added** and paste the command for your O
 
 ### Linux / Docker:
 ```sh
-sh "/path/to/vuetorrent/scripts/auto_exclude.sh" "%I"
+/bin/sh "/path/to/vuetorrent/scripts/auto_exclude.sh" "%I"
 ```
 
 ### macOS:
 ```sh
-sh "/path/to/vuetorrent/scripts/auto_exclude.sh" "%I"
+/bin/sh "/path/to/vuetorrent/scripts/auto_exclude.sh" "%I"
 ```
 
 ### Windows:

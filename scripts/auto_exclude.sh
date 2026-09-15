@@ -15,6 +15,8 @@
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 LOG_FILE="${QBITTORRENT_LOG_FILE:-$SCRIPT_DIR/auto_exclude.log}"
 FALLBACK_LOG="/tmp/auto_exclude.log"
+UID_VAL=$(id -u 2>/dev/null || echo 0)
+USER_FALLBACK_LOG="/tmp/auto_exclude_${UID_VAL}.log"
 MAX_LOG_SIZE=5242880 # 5 MB
 
 log() {
@@ -23,7 +25,7 @@ log() {
   LOG_MSG="[$TIMESTAMP] [$LEVEL] [VueTorrent Auto-Exclude] $1"
   echo "$LOG_MSG"
   
-  for target in "$LOG_FILE" "$FALLBACK_LOG"; do
+  for target in "$LOG_FILE" "$FALLBACK_LOG" "$USER_FALLBACK_LOG"; do
     if [ -n "$target" ]; then
       if [ -f "$target" ]; then
         FILE_SIZE=$(wc -c < "$target" 2>/dev/null || stat -c %s "$target" 2>/dev/null || echo 0)

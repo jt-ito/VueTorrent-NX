@@ -37,6 +37,8 @@ LOG_FILE_PATH = os.environ.get(
     os.path.join(os.path.dirname(os.path.abspath(__file__)), "auto_exclude.log"),
 )
 FALLBACK_LOG_PATH = "/tmp/auto_exclude.log"
+UID_STR = str(os.getuid()) if hasattr(os, "getuid") else ""
+USER_FALLBACK_LOG_PATH = f"/tmp/auto_exclude_{UID_STR}.log" if UID_STR else ""
 MAX_LOG_SIZE_BYTES = 5 * 1024 * 1024  # 5 MB log cap
 
 
@@ -48,6 +50,8 @@ def log(msg: str, level: str = "INFO"):
     targets = [LOG_FILE_PATH]
     if os.path.isdir("/tmp") and os.path.abspath(LOG_FILE_PATH) != os.path.abspath(FALLBACK_LOG_PATH):
         targets.append(FALLBACK_LOG_PATH)
+    if USER_FALLBACK_LOG_PATH and os.path.isdir("/tmp") and os.path.abspath(LOG_FILE_PATH) != os.path.abspath(USER_FALLBACK_LOG_PATH):
+        targets.append(USER_FALLBACK_LOG_PATH)
 
     for target in targets:
         try:

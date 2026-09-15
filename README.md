@@ -40,7 +40,8 @@ VueTorrent-NX is a hardened, automation-friendly, and meticulously polished fork
 - **Automation Safety:** Prevents the manual file-picker dialog from accidentally intercepting or locking up background torrents added by external APIs (like Sonarr/Radarr).
 - **Concurrency Guards:** Introduces strict `activeLocalAdds` guards and `try/finally` safety wrappers to prevent race conditions during rapid UI-initiated adds, keeping your *arr stack functioning smoothly in the background.
 - **Robust Hash Resolution:** Replaces fragile strict-equality string matching for `.torrent` uploads with a resilient fuzzy-matching algorithm and a timestamp-based fallback, ensuring the WebUI never fails to resolve a torrent hash.
-- **Native Exclusion Syncing:** The Pre-Download File Selection dialog now seamlessly reads your native qBittorrent `excluded_file_names` setting! When you add a new torrent, any files matching your native exclusions (like `*.exe` or `*.txt`) are automatically deselected in the beautiful Vue UI before the download even begins. It also correctly manages this state without permanent native pollution, allowing "Reset Settings" to cleanly wipe exclusions.
+- **Native Exclusion Syncing & Bypassing Upstream Engine Bugs:** Solves the notorious qBittorrent bug where native file exclusions (`excluded_file_names`) are silently ignored for magnet links, RSS feeds, and API additions. VueTorrent-NX synchronizes exclusions seamlessly and provides both client-side polling and hardened background scripts to guarantee files are deselected.
+- **Packaged Hardened Background Hook:** Bundles zero-dependency native scripts (`auto_exclude.sh` for Linux/Docker/macOS, `auto_exclude.ps1` for Windows, `auto_exclude.py`) so exclusions apply even when your browser is closed.
 - **Independent CI/CD:** Uses a completely streamlined, standard GitHub Actions release pipeline tailored for this fork, abandoning the complex upstream pipelines.
 
 ---
@@ -91,10 +92,31 @@ If you're running VueTorrent-NX behind a reverse proxy (like Nginx, Traefik, or 
 
 *Tip: Ensure your proxy settings allow long-lived connections for API endpoints if you encounter abrupt disconnects.*
 
-### Native "Excluded File Names" Feature (Complementary)
-For always-on filtering that doesn't depend on VueTorrent being open in a tab, you can enable qBittorrent's native **"Excluded file names"** setting under your Downloads preferences. 
+### The Upstream Auto-Exclusion Bug & How We Bypass It
 
-However, please note that this native setting has known bugs in some qBittorrent versions (e.g. 5.0 - 5.2) where it is silently ignored for magnet links, RSS feeds, and automation-added torrents (see qBittorrent issues #21508, #21624, #24235). VueTorrent-NX provides its own robust client-side filter to bridge this gap, but the native setting remains a fantastic complementary layer!
+qBittorrent features a native "Excluded file names" option (`preferences.excluded_file_names`), but it suffers from severe upstream C++ engine bugs:
+- **The Bug:** In qBittorrent (issues [#21508](https://github.com/qbittorrent/qBittorrent/issues/21508), [#21624](https://github.com/qbittorrent/qBittorrent/issues/21624), [#24235](https://github.com/qbittorrent/qBittorrent/issues/24235)), native exclusions **only work when adding a `.torrent` file that already contains metadata**. When adding torrents via **magnet links**, **RSS feeds**, or **automation APIs (Radarr, Sonarr, etc.)**, qBittorrent completely ignores the exclusion list and downloads dangerous or unwanted files (such as `.exe`, `.lnk`, `.bat`) anyway!
+
+#### How VueTorrent-NX Bypasses It:
+VueTorrent-NX solves this with a two-tier, zero-gap approach:
+
+1. **Active WebUI Mode (Browser Open):**
+   - VueTorrent-NX intercepts newly added torrents and actively monitors metadata status (`waitForMetadata`).
+   - The moment files become available, VueTorrent deselects all matching extensions with Priority 0 (`DO_NOT_DOWNLOAD`) before pieces begin downloading.
+
+2. **Headless / Background Mode (Browser Closed & Automation):**
+   - Packaged directly inside `vuetorrent/scripts/` are hardened, native scripts that hook into qBittorrent's **"Run external program on torrent added"** (`autorun_on_torrent_added_program`):
+     - **Docker, Linux, & macOS:** `auto_exclude.sh` — 100% native, using `/bin/sh`, `curl`, and `awk` already built into Linux, Alpine, and Docker containers (no Python or pip packages required). If `python3` is available (such as in `linuxserver/qbittorrent`), it seamlessly uses Python.
+     - **Windows:** `auto_exclude.ps1` — 100% native, using built-in Windows PowerShell (`Invoke-RestMethod`) with zero extra installs required.
+     - **Universal Python:** `auto_exclude.py` — standard library Python 3.6+ with zero third-party dependencies.
+   - **Dynamic Synchronization:** The scripts fetch `GET /api/v2/app/preferences` on every run. Any extensions you add or edit in VueTorrent-NX are immediately and automatically respected by the background hook.
+   - **Anti-Exploit Security:**
+     - **Strict Hash Validation:** Hashes are strictly verified against `^[a-fA-F0-9]{40}([a-fA-F0-9]{24})?$` to prevent command injection and shell metacharacter exploits.
+     - **Protocol Enforcement:** Enforces `http://` or `https://` only, mitigating SSRF risks.
+     - **Integer ID Validation:** All file indices are strictly cast to integers before dispatching priority updates.
+     - **Secure Temporary Files:** Restricts cookie permissions (`0600`) with automatic exit traps.
+   - **Logging & Disk Protection:** Every event is timestamped (`[YYYY-MM-DD HH:MM:SS] [LEVEL]`) and written to both console and a rolling `auto_exclude.log` capped at 5 MB so it will never consume host disk space.
+   - **Automated Configuration:** When you add your first exclusion in VueTorrent-NX Settings, the WebUI prompts you and can automatically configure qBittorrent's hook for your detected OS with a single click.
 
 ---
 

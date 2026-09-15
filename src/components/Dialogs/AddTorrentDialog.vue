@@ -7,11 +7,10 @@ import HistoryField from '@/components/Core/HistoryField.vue'
 import { useDialog, useI18nUtils } from '@/composables'
 import { HistoryKey } from '@/constants/vuetorrent'
 import { StopCondition } from '@/constants/qbit/AppPreferences'
-import { useAddTorrentStore, useAppStore, useDialogStore, useTorrentStore, useVueTorrentStore, usePreferenceStore } from '@/stores'
+import { useAddTorrentStore, useAppStore, useDialogStore, useTorrentStore, useVueTorrentStore } from '@/stores'
 import { AddTorrentPayload } from '@/types/qbit/payloads'
 import qbit from '@/services/qbit'
 import { getBlockedFileIds } from '@/stores/addTorrents'
-import { globToExtension } from '@/utils/helpers'
 
 const props = withDefaults(
   defineProps<{
@@ -94,14 +93,7 @@ async function submit() {
 
     if (!isMagnet) {
       const torrentFilesList = await qbit.getTorrentFiles(hashOrNull)
-      const preferenceStore = usePreferenceStore()
-      const nativeGlobs = preferenceStore.preferences?.excluded_file_names_enabled 
-        ? (preferenceStore.preferences?.excluded_file_names || '').split('\n').filter(Boolean)
-        : []
-      const nativeExts = nativeGlobs.map(globToExtension).filter(Boolean) as string[]
-      const allBlockedExts = [...vueTorrentStore.blockedExtensions, ...nativeExts]
-      
-      const blockedIds = getBlockedFileIds(torrentFilesList, allBlockedExts)
+      const blockedIds = getBlockedFileIds(torrentFilesList, vueTorrentStore.allBlockedExtensions)
       if (vueTorrentStore.skipPickerForSingleFile && torrentFilesList.length <= 1) {
         if (blockedIds.length === 1) {
           await qbit.deleteTorrents([hashOrNull], true)
@@ -141,7 +133,7 @@ async function submit() {
   }
 
   // ── Feature 2: Silent extension blocklist (no picker) ─────────────────────
-  if (vueTorrentStore.blockedExtensions.length > 0 && torrentsCount === 1) {
+  if (vueTorrentStore.allBlockedExtensions.length > 0 && torrentsCount === 1) {
     void toast
       .promise(
         addTorrentStore.addTorrentWithBlocklist(torrentFiles, torrentUrls, payload),

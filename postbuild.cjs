@@ -9,4 +9,13 @@ function createVersionFile() {
   fs.writeFileSync(filePath, version)
 }
 
+function copyScripts() {
+  const src = path.join(__dirname, 'scripts')
+  const dest = path.join(__dirname, 'vuetorrent', 'scripts')
+  if (fs.existsSync(src)) {
+    fs.cpSync(src, dest, { recursive: true })
+  }
+}
+
 createVersionFile()
+copyScripts()

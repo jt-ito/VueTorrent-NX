@@ -4,14 +4,16 @@ import { useAppStore } from './app'
 import { usePreferenceStore } from './preferences'
 import { useVueTorrentStore } from './vuetorrent'
 import { useDialogStore } from './dialog'
-import { extractMagnetHash } from '@/utils/helpers'
+import { extractMagnetHash, normalizeExtension } from '@/utils/helpers'
 import { FilePriority, FilterState } from '@/constants/qbit'
 import { StopCondition } from '@/constants/qbit/AppPreferences'
-import { TorrentState } from '@/constants/vuetorrent'
+import { TorrentState as QbitTorrentState } from '@/constants/qbit/TorrentState'
 import qbit from '@/services/qbit'
 import { AddTorrentParams } from '@/types/qbit/models'
 import { TorrentFile } from '@/types/qbit/models'
 import { AddTorrentPayload } from '@/types/qbit/payloads'
+
+export { normalizeExtension }
 
 /** How long (ms) to wait for magnet metadata before timing out */
 const METADATA_TIMEOUT_MS = 60_000
@@ -19,20 +21,11 @@ const METADATA_TIMEOUT_MS = 60_000
 const METADATA_POLL_MS = 1_000
 
 /**
- * Normalize a raw extension string to a lowercase dot-prefixed form.
- * e.g. "NFO", ".nfo", "nfo" → ".nfo"
- */
-export function normalizeExtension(raw: string): string {
-  const trimmed = raw.trim().toLowerCase()
-  return trimmed.startsWith('.') ? trimmed : '.' + trimmed
-}
-
-/**
  * Returns the file indexes from `files` that match any of `blockedExts` (pre-normalized).
  */
 export function getBlockedFileIds(files: TorrentFile[], blockedExts: string[]): number[] {
   if (blockedExts.length === 0) return []
-  const extSet = new Set(blockedExts.map(normalizeExtension))
+  const extSet = new Set(blockedExts.map(normalizeExtension).filter(Boolean))
   return files
     .filter(f => {
       const namePart = f.name.replace(/\\/g, '/').split('/').pop() ?? f.name
@@ -207,7 +200,7 @@ export const useAddTorrentStore = defineStore(
      */
     async function waitForMetadata(hash: string, cancelRef: { value: boolean }, onProgress?: (elapsedMs: number) => void): Promise<boolean> {
       const start = Date.now()
-      const metaStates: TorrentState[] = [TorrentState.META_DOWNLOAD, TorrentState.FORCED_META_DOWNLOAD]
+      const metaStates: string[] = [QbitTorrentState.META_DL, QbitTorrentState.FORCED_META_DL]
 
       while (Date.now() - start < METADATA_TIMEOUT_MS) {
         if (cancelRef.value) return false
@@ -220,7 +213,7 @@ export const useAddTorrentStore = defineStore(
 
           const t = torrents[0]
           // qBit 5+ has explicit has_metadata flag; older: check state
-          const hasMeta = t.has_metadata !== undefined ? t.has_metadata : !metaStates.includes(t.state as unknown as TorrentState)
+          const hasMeta = t.has_metadata !== undefined ? t.has_metadata : !metaStates.includes(t.state)
           if (hasMeta) return true
         } catch {
           // transient network error — keep polling
@@ -229,6 +222,23 @@ export const useAddTorrentStore = defineStore(
         onProgress?.(Date.now() - start)
       }
       return false
+    }
+
+    /**
+     * Poll until files are populated for a torrent (up to timeoutMs).
+     */
+    async function waitForFiles(hash: string, timeoutMs: number = 10_000): Promise<TorrentFile[]> {
+      const deadline = Date.now() + timeoutMs
+      while (Date.now() < deadline) {
+        try {
+          const files = await qbit.getTorrentFiles(hash)
+          if (files && files.length > 0) return files
+        } catch {
+          // transient network error
+        }
+        await new Promise(r => setTimeout(r, 500))
+      }
+      return []
     }
 
     /**
@@ -246,8 +256,9 @@ export const useAddTorrentStore = defineStore(
      * Apply the extension blocklist silently: set priority 0 for matching files.
      * Used both in the picker (pre-fill unchecked state) and in silent background mode.
      */
-    async function applyExtensionBlocklist(hash: string, torrentFiles: TorrentFile[]): Promise<number[]> {
-      const blocked = getBlockedFileIds(torrentFiles, vueTorrentStore.blockedExtensions)
+    async function applyExtensionBlocklist(hash: string, torrentFiles: TorrentFile[], blockedExts?: string[]): Promise<number[]> {
+      const extsToBlock = blockedExts ?? vueTorrentStore.allBlockedExtensions
+      const blocked = getBlockedFileIds(torrentFiles, extsToBlock)
       if (blocked.length > 0) {
         await qbit.setTorrentFilePriority(hash, blocked, FilePriority.DO_NOT_DOWNLOAD)
       }
@@ -269,9 +280,12 @@ export const useAddTorrentStore = defineStore(
       const ready = await waitForMetadata(hash, cancelRef)
       if (!ready) return
 
-      const files = await qbit.getTorrentFiles(hash)
+      const files = await waitForFiles(hash)
+      if (files.length === 0) return
+
+      const blockedExts = vueTorrentStore.allBlockedExtensions
       if (vueTorrentStore.skipPickerForSingleFile && files.length === 1) {
-        const blocked = getBlockedFileIds(files, vueTorrentStore.blockedExtensions)
+        const blocked = getBlockedFileIds(files, blockedExts)
         if (blocked.length === 1) {
           await qbit.deleteTorrents([hash], true)
           const { default: SingleFileSkippedDialog } = await import('@/components/Dialogs/SingleFileSkippedDialog.vue')
@@ -280,7 +294,7 @@ export const useAddTorrentStore = defineStore(
           return
         }
       }
-      await applyExtensionBlocklist(hash, files)
+      await applyExtensionBlocklist(hash, files, blockedExts)
       await qbit.removeTorrentTag([hash], ['vt-predownload'])
       await resumeTorrent(hash)
     }
@@ -293,26 +307,37 @@ export const useAddTorrentStore = defineStore(
     }, { immediate: true, deep: false })
     
     const processedExternalHashes = ref<string[]>([])
+    const currentlyProcessingExternalHashes = ref<Set<string>>(new Set())
 
-    async function processExternalTorrentBlocklist(hash: string) {
-      if (vueTorrentStore.blockedExtensions.length === 0) return
+    async function processExternalTorrentBlocklist(hash: string): Promise<boolean> {
+      const blockedExts = vueTorrentStore.allBlockedExtensions
+      if (blockedExts.length === 0) return true
+      if (currentlyProcessingExternalHashes.value.has(hash)) return false
+      currentlyProcessingExternalHashes.value.add(hash)
 
-      const cancelRef = { value: false }
-      const ready = await waitForMetadata(hash, cancelRef)
-      if (!ready) return
+      try {
+        const cancelRef = { value: false }
+        const ready = await waitForMetadata(hash, cancelRef)
+        if (!ready) return false
 
-      const files = await qbit.getTorrentFiles(hash)
-      if (vueTorrentStore.skipPickerForSingleFile && files.length === 1) {
-        const blocked = getBlockedFileIds(files, vueTorrentStore.blockedExtensions)
-        if (blocked.length === 1) {
-          await qbit.deleteTorrents([hash], true)
-          const { default: SingleFileSkippedDialog } = await import('@/components/Dialogs/SingleFileSkippedDialog.vue')
-          const dialogStore = useDialogStore()
-          dialogStore.createDialog(SingleFileSkippedDialog, { filename: files[0].name })
-          return
+        const files = await waitForFiles(hash)
+        if (files.length === 0) return false
+
+        if (vueTorrentStore.skipPickerForSingleFile && files.length === 1) {
+          const blocked = getBlockedFileIds(files, blockedExts)
+          if (blocked.length === 1) {
+            await qbit.deleteTorrents([hash], true)
+            const { default: SingleFileSkippedDialog } = await import('@/components/Dialogs/SingleFileSkippedDialog.vue')
+            const dialogStore = useDialogStore()
+            dialogStore.createDialog(SingleFileSkippedDialog, { filename: files[0].name })
+            return true
+          }
         }
+        await applyExtensionBlocklist(hash, files, blockedExts)
+        return true
+      } finally {
+        currentlyProcessingExternalHashes.value.delete(hash)
       }
-      await applyExtensionBlocklist(hash, files)
     }
 
     async function cleanupOrphanedTorrents() {
@@ -346,12 +371,14 @@ export const useAddTorrentStore = defineStore(
       resetForm,
       addTorrentStopped,
       waitForMetadata,
+      waitForFiles,
       resumeTorrent,
       applyExtensionBlocklist,
       addTorrentWithBlocklist,
       cleanupOrphanedTorrents,
       pendingPickerHashes,
       processedExternalHashes,
+      currentlyProcessingExternalHashes,
       processExternalTorrentBlocklist,
       activeLocalAdds,
       deferredExternalHashes,
@@ -366,7 +393,7 @@ export const useAddTorrentStore = defineStore(
     persistence: {
       enabled: true,
       storageItems: [
-        { storage: sessionStorage, excludePaths: ['files', 'pendingPickerHashes', 'deferredExternalHashes', 'activeLocalAdds', 'isFirstFullSync'] },
+        { storage: sessionStorage, excludePaths: ['files', 'pendingPickerHashes', 'deferredExternalHashes', 'activeLocalAdds', 'isFirstFullSync', 'currentlyProcessingExternalHashes'] },
         { storage: localStorage, includePaths: ['processedExternalHashes'] }
       ],
     },

@@ -2,9 +2,6 @@ name: Update Translations
 
 on:
   workflow_dispatch:
-  schedule:
-    # At 00:00 on Sunday.
-    - cron: '0 0 * * 0'
 
 permissions:
   contents: write
@@ -12,6 +9,7 @@ permissions:
 
 jobs:
   update-translations:
+    if: ${{ secrets.TOLGEE_TOKEN != '' }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -43,7 +41,7 @@ jobs:
       - name: Create Pull Request
         uses: peter-evans/create-pull-request@v8
         with:
-          base: master
+          base: main
           commit-message: 'chore: update translations'
           branch: 'update-tolgee-translations'
           title: 'chore: update translations'

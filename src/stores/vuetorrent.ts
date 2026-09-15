@@ -65,7 +65,54 @@ export const useVueTorrentStore = defineStore(
     const skipPickerForSingleFile = ref(true)
     // Feature 2: auto-skip files by extension (stored as comma-separated normalised lowercase)
     const blockedExtensions = ref<string[]>([])
+    const draftBlockedExtensions = ref<string[]>([])
     const lastPushedNativeExcludedExtensions = ref<string[]>([])
+    const hasSeenExclusionDisclaimer = ref(false)
+
+    function areArraysEqual(a: string[], b: string[]) {
+      if (a.length !== b.length) return false
+      const setA = new Set(a)
+      return b.every(item => setA.has(item))
+    }
+
+    const hasUnsavedBlockedExtensions = computed(() => {
+      return !areArraysEqual(blockedExtensions.value, draftBlockedExtensions.value)
+    })
+
+    function initDraftBlockedExtensions() {
+      draftBlockedExtensions.value = [...blockedExtensions.value]
+    }
+
+    function commitDraftBlockedExtensions() {
+      blockedExtensions.value = [...draftBlockedExtensions.value]
+      void syncNativeBlocklist()
+    }
+
+    function revertDraftBlockedExtensions() {
+      draftBlockedExtensions.value = [...blockedExtensions.value]
+    }
+
+    function getRecommendedAutorunCommand(platform?: string, webuiPath?: string): string {
+      const path = webuiPath || preferenceStore.preferences?.alternative_webui_path || ''
+      const p = (platform || '').toLowerCase()
+      if (p === 'windows') {
+        const winPath = path.replace(/\//g, '\\')
+        return `powershell.exe -ExecutionPolicy Bypass -File "${winPath}\\scripts\\auto_exclude.ps1" "%I"`
+      } else {
+        const unixPath = path.replace(/\\/g, '/')
+        return `sh "${unixPath}/scripts/auto_exclude.sh" "%I"`
+      }
+    }
+
+    const allBlockedExtensions = computed<string[]>(() => {
+      const nativeGlobs = preferenceStore.preferences?.excluded_file_names_enabled
+        ? (preferenceStore.preferences?.excluded_file_names || '').split('\n').filter(Boolean)
+        : []
+      const nativeExts = nativeGlobs.map(globToExtension).filter(Boolean) as string[]
+      const combined = [...blockedExtensions.value, ...nativeExts]
+      const normalized = combined.map(normalizeExtension).filter(Boolean) as string[]
+      return Array.from(new Set(normalized))
+    })
     // Feature 3: VueTorrent-side API key auth & keep-alive
     const vueTorrentApiKey = ref('')
     const keepAliveEnabled = ref(true)
@@ -398,6 +445,14 @@ export const useVueTorrentStore = defineStore(
       skipPickerForSingleFile,
       // Feature 2
       blockedExtensions,
+      draftBlockedExtensions,
+      hasUnsavedBlockedExtensions,
+      hasSeenExclusionDisclaimer,
+      initDraftBlockedExtensions,
+      commitDraftBlockedExtensions,
+      revertDraftBlockedExtensions,
+      getRecommendedAutorunCommand,
+      allBlockedExtensions,
       lastPushedNativeExcludedExtensions,
       syncNativeBlocklist,
       importNativeBlocklist,
@@ -436,6 +491,8 @@ export const useVueTorrentStore = defineStore(
         showPredownloadPicker.value = false
         skipPickerForSingleFile.value = true
         blockedExtensions.value = []
+        draftBlockedExtensions.value = []
+        hasSeenExclusionDisclaimer.value = false
         lastPushedNativeExcludedExtensions.value = []
         vueTorrentApiKey.value = ''
         keepAliveEnabled.value = true

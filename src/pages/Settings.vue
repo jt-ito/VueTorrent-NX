@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { storeToRefs } from 'pinia'
 import { computed, onBeforeUnmount, onMounted, ref, watchEffect } from 'vue'
-import { useRouter } from 'vue-router'
+import { onBeforeRouteLeave, useRouter } from 'vue-router'
 import { toast } from 'vue3-toastify'
 import EnhancedEdition from '@/components/Settings/addons/EnhancedEdition.vue'
 import Advanced from '@/components/Settings/Advanced.vue'
@@ -25,7 +25,8 @@ const router = useRouter()
 const { t } = useI18nUtils()
 const dialogStore = useDialogStore()
 const preferenceStore = usePreferenceStore()
-const { keepDefaultTransitions } = storeToRefs(useVueTorrentStore())
+const vueTorrentStore = useVueTorrentStore()
+const { keepDefaultTransitions } = storeToRefs(vueTorrentStore)
 
 const tabs = [
   { text: t('settings.tabs.vuetorrent.title'), value: 'vuetorrent' },
@@ -54,6 +55,9 @@ const innerTabV = ref('general')
 const isEnhancedEdition = computed(() => preferenceStore.preferences && Object.keys(preferenceStore.preferences).includes('public_trackers'))
 
 async function saveSettings() {
+  if (vueTorrentStore.hasUnsavedBlockedExtensions) {
+    vueTorrentStore.commitDraftBlockedExtensions()
+  }
   await preferenceStore.setPreferences()
   toast.success(t('settings.saveSuccess'))
   await preferenceStore.fetchPreferences()
@@ -70,9 +74,50 @@ async function saveSettings() {
   }
 }
 
-function goHome() {
-  void router.push({ name: 'dashboard' })
+function confirmUnsavedChanges(onConfirm: () => void) {
+  if (vueTorrentStore.hasUnsavedBlockedExtensions) {
+    dialogStore.confirmAction({
+      title: t('dialogs.confirm.unsavedChanges') || 'Unsaved Changes',
+      text: 'You have unsaved changes to your file exclusions. Are you sure you want to discard them and leave?',
+      yesText: 'Discard & Leave',
+      yesColor: 'error',
+      noText: 'Stay',
+      onConfirm: () => {
+        vueTorrentStore.revertDraftBlockedExtensions()
+        onConfirm()
+      },
+    })
+  } else {
+    onConfirm()
+  }
 }
+
+function goHome() {
+  confirmUnsavedChanges(() => {
+    void router.push({ name: 'dashboard' })
+  })
+}
+
+onBeforeRouteLeave((_to, _from, next) => {
+  if (vueTorrentStore.hasUnsavedBlockedExtensions) {
+    dialogStore.confirmAction({
+      title: 'Unsaved Changes',
+      text: 'You have unsaved changes to your file exclusions. Are you sure you want to discard them and leave?',
+      yesText: 'Discard & Leave',
+      yesColor: 'error',
+      noText: 'Stay',
+      onConfirm: () => {
+        vueTorrentStore.revertDraftBlockedExtensions()
+        next()
+      },
+      onCancel: () => {
+        next(false)
+      },
+    })
+  } else {
+    next()
+  }
+})
 
 function handleKeyboardShortcut(e: KeyboardEvent) {
   if (dialogStore.hasActiveDialog) {
@@ -117,7 +162,9 @@ onBeforeUnmount(() => {
       </div>
       <v-spacer />
       <div class="d-flex justify-end">
-        <v-btn color="accent" icon="mdi-content-save" variant="plain" @click="saveSettings" />
+        <v-badge :model-value="vueTorrentStore.hasUnsavedBlockedExtensions" dot color="warning" class="mr-1">
+          <v-btn color="accent" icon="mdi-content-save" variant="plain" @click="saveSettings" />
+        </v-badge>
         <v-btn icon="mdi-close" variant="plain" @click="goHome" />
       </div>
     </div>

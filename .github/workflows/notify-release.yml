@@ -6,6 +6,7 @@ on:
 
 jobs:
   release-to-discord:
+    if: ${{ secrets.WEBHOOK_URL != '' }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { storeToRefs } from 'pinia'
-import { computed, readonly, ref } from 'vue'
+import { computed, onMounted, readonly, ref } from 'vue'
 import { toast } from 'vue3-toastify'
 import ImportSettingsDialog from '@/components/Dialogs/ImportSettingsDialog.vue'
 import { useI18nUtils } from '@/composables'
@@ -47,19 +47,71 @@ async function copyApiKey() {
 // ── Feature 2: Extension blocklist chip input ─────────────────────────────────
 const extensionInput = ref('')
 
-function addExtension() {
-  const normalized = normalizeExtension(extensionInput.value)
-  if (!normalized) return
-  if (!vueTorrentStore.blockedExtensions.includes(normalized)) {
-    vueTorrentStore.blockedExtensions = [...vueTorrentStore.blockedExtensions, normalized]
-    vueTorrentStore.syncNativeBlocklist()
+onMounted(() => {
+  vueTorrentStore.initDraftBlockedExtensions()
+})
+
+function applyRecommendedAutorun() {
+  if (!preferenceStore.preferences) return
+  const cmd = vueTorrentStore.getRecommendedAutorunCommand(
+    appStore.buildInfo?.platform,
+    preferenceStore.preferences.alternative_webui_path
+  )
+  preferenceStore.preferences.autorun_on_torrent_added_enabled = true
+  preferenceStore.preferences.autorun_on_torrent_added_program = cmd
+  toast.success(t('toast.apply.success'))
+}
+
+async function copyAutorunCommand() {
+  if (!preferenceStore.preferences?.autorun_on_torrent_added_program) return
+  await navigator.clipboard.writeText(preferenceStore.preferences.autorun_on_torrent_added_program)
+  toast.success(t('toast.copy.success'))
+}
+
+function doAddExtension(normalized: string) {
+  if (!vueTorrentStore.draftBlockedExtensions.includes(normalized)) {
+    vueTorrentStore.draftBlockedExtensions = [...vueTorrentStore.draftBlockedExtensions, normalized]
   }
   extensionInput.value = ''
 }
 
+function addExtension() {
+  const normalized = normalizeExtension(extensionInput.value)
+  if (!normalized) return
+
+  if (vueTorrentStore.draftBlockedExtensions.includes(normalized)) {
+    extensionInput.value = ''
+    return
+  }
+
+  // If this is their first exclusion, show the disclaimer dialog
+  if (!vueTorrentStore.hasSeenExclusionDisclaimer && vueTorrentStore.draftBlockedExtensions.length === 0) {
+    dialogStore.confirmAction({
+      title: t('settings.vuetorrent.general.torrent_adding.disclaimer_dialog_title') || 'File Exclusion & Background Setup Notice',
+      text: 
+`When VueTorrent is open in your browser, files matching your exclusions will be automatically deselected upon addition.
+
+However, due to upstream qBittorrent engine limitations, exclusions are not automatically deselected in the background (such as for magnet links, RSS feeds, or remote additions) when the WebUI is closed.
+
+To make exclusions work seamlessly in the background with zero extra software required, VueTorrent can automatically configure qBittorrent's external hook to run the bundled script (auto_exclude).
+
+Would you like to add this exclusion and enable the background hook?`,
+      yesText: 'Add & Enable Background Hook',
+      yesColor: 'primary',
+      noText: t('common.cancel') || 'Cancel',
+      onConfirm: () => {
+        vueTorrentStore.hasSeenExclusionDisclaimer = true
+        doAddExtension(normalized)
+        applyRecommendedAutorun()
+      },
+    })
+  } else {
+    doAddExtension(normalized)
+  }
+}
+
 function removeExtension(ext: string) {
-  vueTorrentStore.blockedExtensions = vueTorrentStore.blockedExtensions.filter(e => e !== ext)
-  vueTorrentStore.syncNativeBlocklist()
+  vueTorrentStore.draftBlockedExtensions = vueTorrentStore.draftBlockedExtensions.filter(e => e !== ext)
 }
 
 const github = new Github()
@@ -457,14 +509,22 @@ function openDurationFormatHelp() {
             </div>
           </v-alert>
           <!-- Chip list of current extensions -->
-          <div class="d-flex flex-wrap ga-1 mb-2">
+          <div class="d-flex align-center flex-wrap ga-1 mb-2">
             <v-chip
-              v-for="ext in vueTorrentStore.blockedExtensions"
+              v-for="ext in vueTorrentStore.draftBlockedExtensions"
               :key="ext"
               closable
               size="small"
               @click:close="removeExtension(ext)">
               {{ ext }}
+            </v-chip>
+            <v-chip
+              v-if="vueTorrentStore.hasUnsavedBlockedExtensions"
+              size="x-small"
+              color="warning"
+              variant="tonal"
+              class="ml-1">
+              Unsaved Changes
             </v-chip>
           </div>
           <!-- Input to add a new extension -->
@@ -478,6 +538,54 @@ function openDurationFormatHelp() {
             @click:append-inner="addExtension"
             @keydown.enter.prevent="addExtension"
             @keydown.comma.prevent="addExtension" />
+
+          <!-- Background Auto-Exclusion Hook Section -->
+          <v-card variant="outlined" class="mt-3 pa-3">
+            <div class="d-flex align-center justify-space-between mb-1">
+              <div class="text-subtitle-2 d-flex align-center">
+                <v-icon icon="mdi-auto-fix" size="small" class="mr-2" color="accent" />
+                Background Auto-Exclusion (qBittorrent Hook)
+              </div>
+              <v-chip
+                size="x-small"
+                :color="preferenceStore.preferences?.autorun_on_torrent_added_enabled ? 'success' : 'grey'"
+                variant="flat">
+                {{ preferenceStore.preferences?.autorun_on_torrent_added_enabled ? 'Enabled' : 'Disabled' }}
+              </v-chip>
+            </div>
+            <div class="text-caption text-grey mb-3">
+              Automatically applies your file exclusions when VueTorrent is closed (e.g. magnet links, RSS feeds, or remote API additions). Runs natively with zero extra software required on Windows, Linux, macOS, and Docker.
+            </div>
+
+            <v-checkbox
+              v-if="preferenceStore.preferences"
+              v-model="preferenceStore.preferences.autorun_on_torrent_added_enabled"
+              hide-details
+              density="compact"
+              label="Run background exclusion hook on torrent added" />
+
+            <div v-if="preferenceStore.preferences" class="mt-2">
+              <v-text-field
+                v-model="preferenceStore.preferences.autorun_on_torrent_added_program"
+                density="compact"
+                hide-details
+                label="Hook Program Command"
+                :disabled="!preferenceStore.preferences.autorun_on_torrent_added_enabled"
+                append-inner-icon="mdi-content-copy"
+                @click:append-inner="copyAutorunCommand" />
+              
+              <div class="d-flex ga-2 mt-2">
+                <v-btn
+                  size="small"
+                  variant="tonal"
+                  color="accent"
+                  prepend-icon="mdi-refresh"
+                  @click="applyRecommendedAutorun">
+                  Auto-Configure for {{ appStore.buildInfo?.platform || 'My OS' }}
+                </v-btn>
+              </div>
+            </div>
+          </v-card>
         </v-col>
 
         <!-- Feature 3: Keep-alive toggle -->

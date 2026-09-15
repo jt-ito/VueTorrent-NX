@@ -5,12 +5,11 @@ import { useDialog, useI18nUtils } from '@/composables'
 import { useTreeBuilder } from '@/composables'
 import { FilePriority } from '@/constants/qbit'
 import qbit from '@/services/qbit'
-import { useAddTorrentStore, useVueTorrentStore, usePreferenceStore, useTorrentStore, useDialogStore } from '@/stores'
+import { useAddTorrentStore, useVueTorrentStore, useTorrentStore, useDialogStore } from '@/stores'
 import { TorrentFile } from '@/types/qbit/models'
 import { AddTorrentPayload } from '@/types/qbit/payloads'
 import { TreeNode } from '@/types/vuetorrent'
 import { getBlockedFileIds } from '@/stores/addTorrents'
-import { globToExtension } from '@/utils/helpers'
 
 const props = withDefaults(
   defineProps<{
@@ -28,7 +27,6 @@ const { isOpened } = useDialog(props.guid)
 const { t } = useI18nUtils()
 const addTorrentStore = useAddTorrentStore()
 const vuetorrentStore = useVueTorrentStore()
-const preferenceStore = usePreferenceStore()
 const torrentStore = useTorrentStore()
 const dialogStore = useDialogStore()
 
@@ -91,15 +89,8 @@ async function loadFiles() {
   const torrentFiles = await qbit.getTorrentFiles(props.hash)
   files.value = torrentFiles
   
-  // Combine VueTorrent blocked extensions with native qBittorrent excluded globs
-  const nativeGlobs = preferenceStore.preferences?.excluded_file_names_enabled 
-    ? (preferenceStore.preferences?.excluded_file_names || '').split('\n').filter(Boolean)
-    : []
-  const nativeExts = nativeGlobs.map(globToExtension).filter(Boolean) as string[]
-  const allBlockedExts = [...vuetorrentStore.blockedExtensions, ...nativeExts]
-
   // Pre-select blocklist-matching files as deselected
-  const blockedIds = getBlockedFileIds(torrentFiles, allBlockedExts)
+  const blockedIds = getBlockedFileIds(torrentFiles, vuetorrentStore.allBlockedExtensions)
   deselectedIds.value = new Set(blockedIds)
   triggerRef(deselectedIds)
   expandAll()

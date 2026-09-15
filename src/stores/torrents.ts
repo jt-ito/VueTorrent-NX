@@ -216,14 +216,22 @@ export const useTorrentStore = defineStore(
 
       if (fullUpdate) {
         _torrents.value = new Map(entries as [string, RawQbitTorrent][])
-        if (addStore.isFirstFullSync) {
-          entries.forEach(([hash]) => {
-            if (!addStore.processedExternalHashes.includes(hash)) {
+        entries.forEach(([hash, torrent]) => {
+          if (!addStore.pendingPickerHashes.has(hash) && !addStore.processedExternalHashes.includes(hash)) {
+            // Completed torrents from previous sessions don't need background exclusion
+            if (torrent && (torrent as RawQbitTorrent).progress === 1) {
               addStore.processedExternalHashes.push(hash)
+            } else {
+              // Incomplete / newly added background torrent - process blocklist
+              void addStore.processExternalTorrentBlocklist(hash).then(success => {
+                if (success && !addStore.processedExternalHashes.includes(hash)) {
+                  addStore.processedExternalHashes.push(hash)
+                }
+              })
             }
-          })
-          addStore.isFirstFullSync = false
-        }
+          }
+        })
+        addStore.isFirstFullSync = false
         return
       }
 
@@ -238,8 +246,11 @@ export const useTorrentStore = defineStore(
             if (addStore.activeLocalAdds > 0) {
               addStore.deferredExternalHashes.add(hash)
             } else {
-              addStore.processedExternalHashes.push(hash)
-              addStore.processExternalTorrentBlocklist(hash)
+              void addStore.processExternalTorrentBlocklist(hash).then(success => {
+                if (success && !addStore.processedExternalHashes.includes(hash)) {
+                  addStore.processedExternalHashes.push(hash)
+                }
+              })
             }
           }
         }
@@ -248,8 +259,11 @@ export const useTorrentStore = defineStore(
       if (addStore.activeLocalAdds === 0 && addStore.deferredExternalHashes.size > 0) {
         addStore.deferredExternalHashes.forEach(hash => {
           if (!addStore.pendingPickerHashes.has(hash) && !addStore.processedExternalHashes.includes(hash)) {
-            addStore.processedExternalHashes.push(hash)
-            addStore.processExternalTorrentBlocklist(hash)
+            void addStore.processExternalTorrentBlocklist(hash).then(success => {
+              if (success && !addStore.processedExternalHashes.includes(hash)) {
+                addStore.processedExternalHashes.push(hash)
+              }
+            })
           }
         })
         addStore.deferredExternalHashes.clear()

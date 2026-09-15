@@ -20,7 +20,15 @@ const KEEP_ALIVE_INTERVAL_MS = 30_000
 
 export const useMaindataStore = defineStore('maindata', () => {
   const rid = ref<number>()
-  const serverState = shallowRef<Partial<ServerState>>()
+  const cachedServerState = (() => {
+    try {
+      const stored = sessionStorage.getItem('vuetorrent_server_state')
+      return stored ? JSON.parse(stored) : undefined
+    } catch {
+      return undefined
+    }
+  })()
+  const serverState = shallowRef<Partial<ServerState> | undefined>(cachedServerState)
 
   const appStore = useAppStore()
   const categoryStore = useCategoryStore()
@@ -65,6 +73,14 @@ export const useMaindataStore = defineStore('maindata', () => {
       serverState.value = obj
     } else if (obj) {
       serverState.value = { ...serverState.value, ...obj }
+    }
+
+    try {
+      if (serverState.value) {
+        sessionStorage.setItem('vuetorrent_server_state', JSON.stringify(serverState.value))
+      }
+    } catch {
+      // ignore storage quota errors
     }
 
     navbarStore.pushTimeData()

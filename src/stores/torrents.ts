@@ -3,7 +3,6 @@ import { acceptHMRUpdate, defineStore } from 'pinia'
 import { computed, MaybeRefOrGetter, ref, shallowRef, toValue, triggerRef } from 'vue'
 import { useAppStore } from './app'
 import { useAddTorrentStore } from './addTorrents'
-import { useTorrentDetailStore } from './torrentDetail'
 import { useTrackerStore } from './trackers'
 import { useSearchQuery, useTorrentBuilder } from '@/composables'
 import { comparatorMap, FilterType, TorrentState, TrackerSpecialFilter } from '@/constants/vuetorrent'
@@ -33,14 +32,8 @@ export const useTorrentStore = defineStore(
     const trackerStore = useTrackerStore()
 
     const _torrents = shallowRef<Map<string, RawQbitTorrent>>(new Map())
-    const torrents = computed(() =>
-      Array.from(_torrents.value.entries()).map(([hash, v]) =>
-        buildFromQbit({
-          ...v,
-          hash,
-        })
-      )
-    )
+    const _builtTorrents = new Map<string, VtTorrent>()
+    const torrents = shallowRef<VtTorrent[]>([])
 
     const filterType = ref(FilterType.CONJUNCTIVE)
 
@@ -216,13 +209,22 @@ export const useTorrentStore = defineStore(
 
       if (fullUpdate) {
         _torrents.value = new Map(entries as [string, RawQbitTorrent][])
-        entries.forEach(([hash, torrent]) => {
-          if (!addStore.pendingPickerHashes.has(hash) && !addStore.processedExternalHashes.includes(hash)) {
-            // Completed torrents from previous sessions don't need background exclusion
-            if (torrent && (torrent as RawQbitTorrent).progress === 1) {
-              addStore.processedExternalHashes.push(hash)
+        _builtTorrents.clear()
+        const builtList: VtTorrent[] = []
+        const processedSet = new Set(addStore.processedExternalHashes)
+        const newlyProcessed: string[] = []
+
+        for (const [hash, rawTorrent] of entries) {
+          const raw = rawTorrent as RawQbitTorrent
+          const built = buildFromQbit({ ...raw, hash })
+          _builtTorrents.set(hash, built)
+          builtList.push(built)
+
+          if (!addStore.pendingPickerHashes.has(hash) && !processedSet.has(hash)) {
+            if (raw && raw.progress === 1) {
+              newlyProcessed.push(hash)
+              processedSet.add(hash)
             } else {
-              // Incomplete / newly added background torrent - process blocklist
               void addStore.processExternalTorrentBlocklist(hash).then(success => {
                 if (success && !addStore.processedExternalHashes.includes(hash)) {
                   addStore.processedExternalHashes.push(hash)
@@ -230,17 +232,26 @@ export const useTorrentStore = defineStore(
               })
             }
           }
-        })
+        }
+
+        if (newlyProcessed.length > 0) {
+          addStore.processedExternalHashes.push(...newlyProcessed)
+        }
         addStore.isFirstFullSync = false
+        torrents.value = builtList
         return
       }
 
       for (const [hash, qbitTorrent] of entries) {
         const torrent = _torrents.value.get(hash)
         if (torrent) {
-          _torrents.value.set(hash, { ...torrent, ...qbitTorrent })
+          const merged = { ...torrent, ...qbitTorrent }
+          _torrents.value.set(hash, merged)
+          _builtTorrents.set(hash, buildFromQbit({ ...merged, hash }))
         } else {
-          _torrents.value.set(hash, qbitTorrent as RawQbitTorrent)
+          const raw = qbitTorrent as RawQbitTorrent
+          _torrents.value.set(hash, raw)
+          _builtTorrents.set(hash, buildFromQbit({ ...raw, hash }))
           // NEW torrent detected in delta update
           if (!addStore.pendingPickerHashes.has(hash) && !addStore.processedExternalHashes.includes(hash)) {
             if (addStore.activeLocalAdds > 0) {
@@ -271,9 +282,11 @@ export const useTorrentStore = defineStore(
 
       removed?.forEach(t => {
         _torrents.value.delete(t)
+        _builtTorrents.delete(t)
         addStore.processedExternalHashes = addStore.processedExternalHashes.filter(h => h !== t)
       })
-      triggerRef(_torrents)
+
+      torrents.value = Array.from(_builtTorrents.values())
     }
 
     async function setTorrentCategory(hashes: string[], category: string) {
@@ -293,7 +306,7 @@ export const useTorrentStore = defineStore(
     }
 
     function getTorrentByHash(hash: string) {
-      return torrents.value.find(t => t.hash === hash)
+      return _builtTorrents.get(hash)
     }
 
     function getTorrentIndexByHash(hash: string) {
@@ -437,6 +450,8 @@ export const useTorrentStore = defineStore(
       exportTorrent,
       $reset: () => {
         _torrents.value.clear()
+        _builtTorrents.clear()
+        torrents.value = []
         triggerRef(_torrents)
         sortCriterias.value = [{ value: 'added_on', reverse: true }]
 
@@ -466,11 +481,31 @@ export const useTorrentStore = defineStore(
   {
     persistence: {
       enabled: true,
-      storageItems: [{ storage: localStorage }],
+      storageItems: [
+        {
+          storage: localStorage,
+          includePaths: [
+            'sortCriterias',
+            'filterType',
+            'statusFilter',
+            'isStatusFilterActive',
+            'categoryFilter',
+            'isCategoryFilterActive',
+            'tagFilterInclude',
+            'tagFilterExclude',
+            'tagFilterType',
+            'isTagFilterActive',
+            'trackerFilterInclude',
+            'trackerFilterExclude',
+            'trackerFilterType',
+            'isTrackerFilterActive',
+          ],
+        },
+      ],
     },
   }
 )
 
 if (import.meta.hot) {
-  import.meta.hot.accept(acceptHMRUpdate(useTorrentDetailStore, import.meta.hot))
+  import.meta.hot.accept(acceptHMRUpdate(useTorrentStore, import.meta.hot))
 }

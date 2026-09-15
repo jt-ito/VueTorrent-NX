@@ -116,11 +116,15 @@ watch(
     if (isAuthenticated) {
       maindataStore.forceMaindataSync()
       maindataStore.resumeKeepAlive()
-      addTorrentStore.cleanupOrphanedTorrents()
       await preferencesStore.fetchPreferences()
       vuetorrentStore.importNativeBlocklist()
       void vuetorrentStore.syncNativeBlocklist()
-      await logStore.cleanAndFetchLogs()
+
+      // Defer non-critical startup tasks so they don't congest network / delay torrent rendering
+      setTimeout(() => {
+        addTorrentStore.cleanupOrphanedTorrents()
+        void logStore.cleanAndFetchLogs()
+      }, 1500)
 
       void backend.ping().then(async ok => {
         if (ok) {

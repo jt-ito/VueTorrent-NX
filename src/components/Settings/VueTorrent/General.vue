@@ -566,7 +566,7 @@ function openDurationFormatHelp() {
             @keydown.comma.prevent="addExtension" />
 
           <!-- Background Auto-Exclusion Section -->
-          <v-card variant="outlined" class="mt-3 pa-3">
+          <v-card variant="flat" class="mt-3 pa-3">
             <div class="d-flex align-center justify-space-between mb-1">
               <div class="text-subtitle-2 d-flex align-center">
                 <v-icon icon="mdi-auto-fix" size="small" class="mr-2" color="accent" />

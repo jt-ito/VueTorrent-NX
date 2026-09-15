@@ -96,31 +96,60 @@ def normalize_pattern(pattern: str) -> str:
 
 
 def find_qbit_conf_info() -> dict:
-    """Inspects standard qBittorrent config paths in Docker/Linux/macOS."""
+    """Inspects standard qBittorrent config paths in Docker/Linux/macOS.
+    Falls back to recursive search of common volume mount roots."""
+    # Direct candidates (fast path)
     candidates = [
         "/config/qBittorrent/qBittorrent.conf",
         "/config/qbittorrent/qBittorrent.conf",
         "/config/qBittorrent.conf",
         os.path.expanduser("~/.config/qBittorrent/qBittorrent.conf"),
+        os.path.expanduser("~/.local/share/qBittorrent/qBittorrent.conf"),
     ]
-    info = {"port": None, "https": False, "local_auth": None}
+    info = {"port": None, "https": False, "local_auth": None, "conf_path": None}
+
+    # Try direct candidates first
     for path in candidates:
         if os.path.isfile(path):
-            try:
-                with open(path, "r", encoding="utf-8", errors="ignore") as f:
-                    for line in f:
-                        line_s = line.strip()
-                        lower = line_s.lower()
-                        if lower.startswith("webui\\port="):
-                            info["port"] = int(line_s.split("=", 1)[1].strip())
-                        elif lower.startswith("webui\\https\\enabled="):
-                            info["https"] = line_s.split("=", 1)[1].strip().lower() in ("true", "1")
-                        elif lower.startswith("webui\\localhostauth="):
-                            info["local_auth"] = line_s.split("=", 1)[1].strip().lower() in ("true", "1")
-                if info["port"] is not None or info["local_auth"] is not None:
-                    break
-            except Exception:
-                pass
+            result = _parse_qbit_conf(path, info)
+            if result["conf_path"]:
+                return result
+
+    # Recursive search in common Docker volume roots (e.g. /config/qBittorrent/config/)
+    search_roots = ["/config", os.path.expanduser("~/.config"), "/data"]
+    for root in search_roots:
+        if not os.path.isdir(root):
+            continue
+        try:
+            for dirpath, _dirnames, filenames in os.walk(root):
+                if "qBittorrent.conf" in filenames:
+                    found = os.path.join(dirpath, "qBittorrent.conf")
+                    result = _parse_qbit_conf(found, info)
+                    if result["conf_path"]:
+                        return result
+        except Exception:
+            pass
+
+    return info
+
+
+def _parse_qbit_conf(path: str, info: dict) -> dict:
+    """Parses a qBittorrent.conf file and returns populated info dict."""
+    try:
+        with open(path, "r", encoding="utf-8", errors="ignore") as f:
+            for line in f:
+                line_s = line.strip()
+                lower = line_s.lower()
+                if lower.startswith("webui\\port="):
+                    info["port"] = int(line_s.split("=", 1)[1].strip())
+                elif lower.startswith("webui\\https\\enabled="):
+                    info["https"] = line_s.split("=", 1)[1].strip().lower() in ("true", "1")
+                elif lower.startswith("webui\\localhostauth="):
+                    info["local_auth"] = line_s.split("=", 1)[1].strip().lower() in ("true", "1")
+        if info["port"] is not None or info["local_auth"] is not None:
+            info["conf_path"] = path
+    except Exception:
+        pass
     return info
 
 
@@ -424,10 +453,12 @@ def main():
     parser.add_argument("--debug", action="store_true", help="Enable verbose debug logging")
 
     args = parser.parse_args()
+    log(f"Script invoked with args: {' '.join(sys.argv[1:])}")
     torrent_hash = (args.hash or args.opt_hash).strip()
     target_url = (args.pos_url or args.url).strip()
 
     if not torrent_hash:
+        log("No torrent hash provided.", level="ERROR")
         parser.print_help()
         sys.exit(1)
 

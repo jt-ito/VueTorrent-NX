@@ -40,9 +40,10 @@ HASH="$1"
 URL="${2:-${QBITTORRENT_URL:-http://127.0.0.1:8080}}"
 URL="${URL%/}"
 
+log "Script invoked with args: $*"
+
 if [ -z "$HASH" ]; then
-  echo "Usage: $0 <torrent_hash> [qBittorrent_url]"
-  echo "Example: $0 %I"
+  log "No torrent hash provided. Usage: $0 <torrent_hash> [qBittorrent_url]" "ERROR"
   exit 1
 fi
 

@@ -83,24 +83,55 @@ export const useVueTorrentStore = defineStore(
       draftBlockedExtensions.value = [...blockedExtensions.value]
     }
 
+    function syncDraftToPreferences() {
+      if (!preferenceStore.preferences) return
+      const { finalGlobsStr } = reconcileNativeExcludedFiles(
+        preferenceStore.preferences.excluded_file_names,
+        lastPushedNativeExcludedExtensions.value,
+        draftBlockedExtensions.value
+      )
+      preferenceStore.preferences.excluded_file_names = finalGlobsStr
+      preferenceStore.preferences.excluded_file_names_enabled = draftBlockedExtensions.value.length > 0
+    }
+
     function commitDraftBlockedExtensions() {
       blockedExtensions.value = [...draftBlockedExtensions.value]
-      void syncNativeBlocklist()
+      if (preferenceStore.preferences) {
+        const { finalGlobsStr, newPushedGlobs } = reconcileNativeExcludedFiles(
+          preferenceStore.preferences.excluded_file_names,
+          lastPushedNativeExcludedExtensions.value,
+          blockedExtensions.value
+        )
+        preferenceStore.preferences.excluded_file_names = finalGlobsStr
+        preferenceStore.preferences.excluded_file_names_enabled = blockedExtensions.value.length > 0
+        lastPushedNativeExcludedExtensions.value = [...newPushedGlobs]
+      }
     }
 
     function revertDraftBlockedExtensions() {
       draftBlockedExtensions.value = [...blockedExtensions.value]
+      if (preferenceStore.preferences) {
+        const { finalGlobsStr } = reconcileNativeExcludedFiles(
+          preferenceStore.preferences.excluded_file_names,
+          lastPushedNativeExcludedExtensions.value,
+          blockedExtensions.value
+        )
+        preferenceStore.preferences.excluded_file_names = finalGlobsStr
+        preferenceStore.preferences.excluded_file_names_enabled = blockedExtensions.value.length > 0
+      }
     }
 
-    function getRecommendedAutorunCommand(platform?: string, webuiPath?: string): string {
+    function getRecommendedAutorunCommand(platform?: string, webuiPath?: string, port?: number): string {
       const path = webuiPath || preferenceStore.preferences?.alternative_webui_path || ''
       const p = (platform || '').toLowerCase()
+      const webPort = port || preferenceStore.preferences?.web_ui_port || 8080
+      const localUrl = `http://127.0.0.1:${webPort}`
       if (p === 'windows') {
         const winPath = path.replace(/\//g, '\\')
-        return `powershell.exe -ExecutionPolicy Bypass -File "${winPath}\\scripts\\auto_exclude.ps1" "%I"`
+        return `powershell.exe -ExecutionPolicy Bypass -File "${winPath}\\scripts\\auto_exclude.ps1" "%I" "${localUrl}"`
       } else {
         const unixPath = path.replace(/\\/g, '/')
-        return `sh "${unixPath}/scripts/auto_exclude.sh" "%I"`
+        return `sh "${unixPath}/scripts/auto_exclude.sh" "%I" "${localUrl}"`
       }
     }
 
@@ -449,6 +480,7 @@ export const useVueTorrentStore = defineStore(
       hasUnsavedBlockedExtensions,
       hasSeenExclusionDisclaimer,
       initDraftBlockedExtensions,
+      syncDraftToPreferences,
       commitDraftBlockedExtensions,
       revertDraftBlockedExtensions,
       getRecommendedAutorunCommand,

@@ -75,10 +75,12 @@ function applyRecommendedAutorun(showToast = true) {
   if (!preferenceStore.preferences) return
   const cmd = vueTorrentStore.getRecommendedAutorunCommand(
     appStore.buildInfo?.platform,
-    preferenceStore.preferences.alternative_webui_path
+    preferenceStore.preferences.alternative_webui_path,
+    preferenceStore.preferences.web_ui_port
   )
   preferenceStore.preferences.autorun_on_torrent_added_enabled = true
   preferenceStore.preferences.autorun_on_torrent_added_program = cmd
+  preferenceStore.preferences.bypass_local_auth = true
   if (showToast) {
     toast.success(t('toast.apply.success'))
   }
@@ -93,6 +95,7 @@ async function copyAutorunCommand() {
 function doAddExtension(normalized: string) {
   if (!vueTorrentStore.draftBlockedExtensions.includes(normalized)) {
     vueTorrentStore.draftBlockedExtensions = [...vueTorrentStore.draftBlockedExtensions, normalized]
+    vueTorrentStore.syncDraftToPreferences()
   }
   extensionInput.value = ''
 }
@@ -134,6 +137,7 @@ Would you like to add this exclusion and enable the background hook?`,
 
 function removeExtension(ext: string) {
   vueTorrentStore.draftBlockedExtensions = vueTorrentStore.draftBlockedExtensions.filter(e => e !== ext)
+  vueTorrentStore.syncDraftToPreferences()
 }
 
 const github = new Github()

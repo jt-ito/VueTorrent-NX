@@ -17,4 +17,10 @@ router.beforeResolve(to => {
   }
 })
 
+router.onError(error => {
+  if (/Failed to fetch dynamically imported module|error loading dynamically imported module/i.test(error.message)) {
+    location.reload()
+  }
+})
+
 export default router

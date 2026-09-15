@@ -12,8 +12,6 @@
 # Logging:
 # - Dual output: stdout and rolling log file (auto_exclude.log, capped at 5MB).
 
-set -e
-
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 LOG_FILE="${QBITTORRENT_LOG_FILE:-$SCRIPT_DIR/auto_exclude.log}"
 MAX_LOG_SIZE=5242880 # 5 MB
@@ -37,7 +35,8 @@ log() {
 }
 
 HASH="$1"
-URL="${QBITTORRENT_URL:-http://127.0.0.1:8080}"
+URL="${2:-${QBITTORRENT_URL:-http://127.0.0.1:8080}}"
+URL="${URL%/}"
 
 if [ -z "$HASH" ]; then
   echo "Usage: $0 <torrent_hash> [qBittorrent_url]"
@@ -63,11 +62,11 @@ esac
 
 # 2. Prefer Python 3 if installed on the system (e.g. linuxserver/qbittorrent Docker or standard Linux)
 if command -v python3 >/dev/null 2>&1 && [ -f "$SCRIPT_DIR/auto_exclude.py" ]; then
-  exec python3 "$SCRIPT_DIR/auto_exclude.py" "$@"
+  exec python3 "$SCRIPT_DIR/auto_exclude.py" "$HASH" --url "$URL"
 fi
 
 if command -v python >/dev/null 2>&1 && [ -f "$SCRIPT_DIR/auto_exclude.py" ]; then
-  exec python "$SCRIPT_DIR/auto_exclude.py" "$@"
+  exec python "$SCRIPT_DIR/auto_exclude.py" "$HASH" --url "$URL"
 fi
 
 # 3. Pure POSIX fallback using /bin/sh, curl, and awk (standard in BusyBox, Alpine, Debian, macOS)
@@ -96,6 +95,11 @@ fi
 PREFS=$(curl -s $AUTH_ARGS "$URL/api/v2/app/preferences" 2>/dev/null || true)
 if [ -z "$PREFS" ]; then
   log "Failed to connect to qBittorrent at $URL" "ERROR"
+  exit 1
+fi
+
+if [ "$PREFS" = "Forbidden" ] || [ "$PREFS" = "Unauthorized" ]; then
+  log "qBittorrent returned '$PREFS'. Please ensure 'Bypass authentication for clients on localhost' is enabled in WebUI settings, or configure credentials." "ERROR"
   exit 1
 fi
 

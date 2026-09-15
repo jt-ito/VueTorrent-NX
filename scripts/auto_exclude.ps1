@@ -93,7 +93,11 @@ if ($Username) {
 try {
     $prefs = Invoke-RestMethod -Uri "$Url/api/v2/app/preferences" -Method Get -WebSession $session -TimeoutSec 15
 } catch {
-    Write-Log "Failed to connect to qBittorrent at $($Url): $_" "ERROR"
+    if ($_.Exception.Response.StatusCode -eq [System.Net.HttpStatusCode]::Forbidden) {
+        Write-Log "Authentication failed (HTTP 403) accessing $($Url). Please ensure 'Bypass authentication for clients on localhost' is enabled in qBittorrent WebUI settings, or provide credentials." "ERROR"
+    } else {
+        Write-Log "Failed to connect to qBittorrent at $($Url): $_" "ERROR"
+    }
     exit 1
 }
 

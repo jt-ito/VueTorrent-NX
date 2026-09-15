@@ -205,6 +205,17 @@ def process_torrent(
     # 1. Fetch preferences to extract excluded file extensions
     try:
         prefs = client.get_preferences()
+    except urllib.error.HTTPError as e:
+        if e.code == 403:
+            log(
+                f"Authentication failed (HTTP 403) accessing {base_url}. "
+                "Please ensure 'Bypass authentication for clients on localhost' is enabled in qBittorrent WebUI settings, "
+                "or provide credentials via --username/--password or QBITTORRENT_USER/QBITTORRENT_PASS.",
+                level="ERROR",
+            )
+        else:
+            log(f"Failed to fetch qBittorrent preferences from {base_url}: {e}", level="ERROR")
+        return False
     except Exception as e:
         log(f"Failed to fetch qBittorrent preferences from {base_url}: {e}", level="ERROR")
         return False
@@ -305,6 +316,7 @@ def main():
         description="VueTorrent Auto-Exclusion Hook - Cross-Platform background file exclusion for qBittorrent."
     )
     parser.add_argument("hash", nargs="?", default="", help="Torrent info hash (%%I)")
+    parser.add_argument("pos_url", nargs="?", default="", help="Optional qBittorrent WebUI URL")
     parser.add_argument("--hash", dest="opt_hash", default="", help="Torrent info hash")
     parser.add_argument(
         "--url",
@@ -337,6 +349,7 @@ def main():
 
     args = parser.parse_args()
     torrent_hash = (args.hash or args.opt_hash).strip()
+    target_url = (args.pos_url or args.url).strip()
 
     if not torrent_hash:
         parser.print_help()
@@ -344,7 +357,7 @@ def main():
 
     success = process_torrent(
         torrent_hash=torrent_hash,
-        base_url=args.url,
+        base_url=target_url,
         username=args.username,
         password=args.password,
         timeout=args.timeout,

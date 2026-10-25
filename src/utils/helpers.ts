@@ -44,3 +44,22 @@ export function extractMagnetHash(uri: string): string | null {
   const match = uri.match(/xt=urn:btih:([a-zA-Z0-9]+)/i)
   return match ? match[1].toLowerCase() : null
 }
+
+/**
+ * Runs `task` for every item with at most `limit` running at once (a failing task doesn't stop the others).
+ * Used to avoid flooding the server with one request chain per torrent.
+ */
+export async function runWithConcurrency<T>(items: T[], limit: number, task: (item: T) => Promise<unknown>): Promise<void> {
+  let next = 0
+  async function worker() {
+    while (next < items.length) {
+      const item = items[next++]
+      try {
+        await task(item)
+      } catch {
+        // one failing item must not stall the queue
+      }
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker))
+}

@@ -10,6 +10,10 @@ import qbit from '@/services/qbit'
 import { RawQbitTorrent } from '@/types/qbit/models'
 import { AddTorrentPayload } from '@/types/qbit/payloads'
 import { Torrent as VtTorrent } from '@/types/vuetorrent'
+import { runWithConcurrency } from '@/utils/helpers'
+
+/** How many not-yet-processed torrents are checked against the extension blocklist at once during a full sync */
+const EXTERNAL_PROCESSING_CONCURRENCY = 4
 
 export const useTorrentStore = defineStore(
   'torrents',
@@ -213,6 +217,7 @@ export const useTorrentStore = defineStore(
         const builtList: VtTorrent[] = []
         const processedSet = new Set(addStore.processedExternalHashes)
         const newlyProcessed: string[] = []
+        const toProcess: string[] = []
 
         for (const [hash, rawTorrent] of entries) {
           const raw = rawTorrent as RawQbitTorrent
@@ -225,13 +230,20 @@ export const useTorrentStore = defineStore(
               newlyProcessed.push(hash)
               processedSet.add(hash)
             } else {
-              void addStore.processExternalTorrentBlocklist(hash).then(success => {
-                if (success && !addStore.processedExternalHashes.includes(hash)) {
-                  addStore.processedExternalHashes.push(hash)
-                }
-              })
+              toProcess.push(hash)
             }
           }
+        }
+
+        // A full sync can list hundreds of unprocessed torrents: handle them a few at a time, otherwise their
+        // metadata/file requests flood the server and queue every other request (including the user's clicks)
+        if (toProcess.length > 0) {
+          void runWithConcurrency(toProcess, EXTERNAL_PROCESSING_CONCURRENCY, async hash => {
+            const success = await addStore.processExternalTorrentBlocklist(hash)
+            if (success && !addStore.processedExternalHashes.includes(hash)) {
+              addStore.processedExternalHashes.push(hash)
+            }
+          })
         }
 
         if (newlyProcessed.length > 0) {

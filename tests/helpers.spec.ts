@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { extensionToGlob, globToExtension, normalizeExtension, reconcileNativeExcludedFiles } from '../src/utils/helpers'
+import { extensionToGlob, globToExtension, normalizeExtension, reconcileNativeExcludedFiles, runWithConcurrency } from '../src/utils/helpers'
 
 describe('helpers', () => {
   describe('normalizeExtension', () => {
@@ -59,6 +59,36 @@ describe('helpers', () => {
     it('deduplicates patterns', () => {
       const result = reconcileNativeExcludedFiles('*.txt\n*.nfo', [], ['.txt'])
       expect(result.finalGlobsStr).toBe('*.txt\n*.nfo')
+    })
+  })
+
+  describe('runWithConcurrency', () => {
+    it('never runs more than `limit` tasks at once and runs every item', async () => {
+      let active = 0
+      let peak = 0
+      const done: number[] = []
+      await runWithConcurrency([1, 2, 3, 4, 5, 6, 7, 8, 9, 10], 3, async n => {
+        active++
+        peak = Math.max(peak, active)
+        await new Promise(r => setTimeout(r, 5))
+        active--
+        done.push(n)
+      })
+      expect(peak).toBe(3)
+      expect(done.sort((a, b) => a - b)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
+    })
+
+    it('keeps going when a task throws', async () => {
+      const done: number[] = []
+      await runWithConcurrency([1, 2, 3], 1, async n => {
+        if (n === 2) throw new Error('boom')
+        done.push(n)
+      })
+      expect(done).toEqual([1, 3])
+    })
+
+    it('handles an empty list', async () => {
+      await expect(runWithConcurrency([], 4, async () => {})).resolves.toBeUndefined()
     })
   })
 })

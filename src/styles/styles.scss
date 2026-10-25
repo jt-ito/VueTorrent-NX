@@ -97,6 +97,18 @@ tr.ripple-fix {
   overflow: visible; // v-card clips by default, which disables position: sticky inside it
 }
 
+/* Phone layout of the peers/trackers tables: let the "Sort by" row pin below the search bar.
+   Only here, because the wrapper must keep scrolling sideways when a wide table is shown. */
+.detail-sticky-host .v-table__wrapper:has(.v-data-table-headers--mobile) {
+  overflow: visible;
+}
+.detail-sticky-host th.v-data-table-headers--mobile {
+  position: sticky;
+  top: calc(var(--v-layout-top, 0px) + var(--detail-sticky-h, 0px) + var(--detail-search-h, 0px));
+  z-index: 3;
+  background: rgb(var(--v-theme-surface));
+}
+
 /* Grid layout */
 .d-grid {
   display: grid;

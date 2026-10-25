@@ -86,48 +86,53 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="pa-3">
-    <div class="d-flex align-center">
-      <div class="text-headline-medium ml-2">
-        {{ t('logs.title') }}
+  <div class="px-3 pb-3">
+    <!-- Title, filters and top page selector stay pinned while the log rows scroll -->
+    <div class="logs-sticky bg-background pt-3">
+      <div class="d-flex align-center">
+        <div class="text-headline-medium ml-2">
+          {{ t('logs.title') }}
+        </div>
+        <v-spacer />
+        <div class="d-flex justify-end">
+          <v-btn :icon="reverseSort ? 'mdi-sort-descending' : 'mdi-sort-ascending'" variant="plain" @click="reverseSort = !reverseSort" />
+          <v-btn icon="mdi-close" variant="plain" @click="goHome" />
+        </div>
       </div>
-      <v-spacer />
-      <div class="d-flex justify-end">
-        <v-btn :icon="reverseSort ? 'mdi-sort-descending' : 'mdi-sort-ascending'" variant="plain" @click="reverseSort = !reverseSort" />
-        <v-btn icon="mdi-close" variant="plain" @click="goHome" />
-      </div>
+
+      <v-list>
+        <v-list-item>
+          <v-row>
+            <v-col cols="6">
+              <v-select v-model="logTypeFilter" :items="logTypeOptions" :label="t('logs.filters.type')" chips hide-details multiple>
+                <template #prepend-item>
+                  <v-list-item :title="t('common.selectAll')" @click="toggleSelectAll">
+                    <template #prepend>
+                      <v-checkbox-btn :indeterminate="someTypesSelected && !allTypesSelected" :model-value="someTypesSelected" />
+                    </template>
+                  </v-list-item>
+                  <v-divider />
+                </template>
+              </v-select>
+            </v-col>
+
+            <v-col cols="6">
+              <v-text-field v-model="logMessageFilter" :label="t('logs.filters.query')" clearable hide-details />
+            </v-col>
+          </v-row>
+        </v-list-item>
+
+        <v-divider class="my-3" thickness="5" />
+
+        <v-list-item v-if="pageCount > 1">
+          <v-pagination v-model="currentPage" :length="pageCount" prev-icon="mdi-menu-left" next-icon="mdi-menu-right" />
+        </v-list-item>
+
+        <v-divider />
+      </v-list>
     </div>
 
     <v-list>
-      <v-list-item>
-        <v-row>
-          <v-col cols="6">
-            <v-select v-model="logTypeFilter" :items="logTypeOptions" :label="t('logs.filters.type')" chips hide-details multiple>
-              <template #prepend-item>
-                <v-list-item :title="t('common.selectAll')" @click="toggleSelectAll">
-                  <template #prepend>
-                    <v-checkbox-btn :indeterminate="someTypesSelected && !allTypesSelected" :model-value="someTypesSelected" />
-                  </template>
-                </v-list-item>
-                <v-divider />
-              </template>
-            </v-select>
-          </v-col>
-
-          <v-col cols="6">
-            <v-text-field v-model="logMessageFilter" :label="t('logs.filters.query')" clearable hide-details />
-          </v-col>
-        </v-row>
-      </v-list-item>
-
-      <v-divider class="my-3" thickness="5" />
-
-      <v-list-item v-if="pageCount > 1">
-        <v-pagination v-model="currentPage" :length="pageCount" prev-icon="mdi-menu-left" next-icon="mdi-menu-right" />
-      </v-list-item>
-
-      <v-divider />
-
       <template v-for="(log, index) in paginatedResults" :key="log.id">
         <v-divider v-if="index > 0" />
 
@@ -162,3 +167,11 @@ onUnmounted(() => {
     </v-list>
   </div>
 </template>
+
+<style scoped>
+.logs-sticky {
+  position: sticky;
+  top: var(--v-layout-top, 0px);
+  z-index: 5;
+}
+</style>

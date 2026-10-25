@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { storeToRefs } from 'pinia'
+import { useElementSize } from '@vueuse/core'
 import { computed, onBeforeUnmount, onMounted, ref, watchEffect } from 'vue'
 import { onBeforeRouteLeave, useRouter } from 'vue-router'
 import { toast } from 'vue3-toastify'
@@ -26,7 +26,10 @@ const { t } = useI18nUtils()
 const dialogStore = useDialogStore()
 const preferenceStore = usePreferenceStore()
 const vueTorrentStore = useVueTorrentStore()
-const { keepDefaultTransitions } = storeToRefs(vueTorrentStore)
+
+// Title bar + main tabs stay pinned while scrolling; the VueTorrent sub-tabs stick just below them
+const stickyHeader = ref<HTMLElement>()
+const { height: stickyHeaderHeight } = useElementSize(stickyHeader, undefined, { box: 'border-box' })
 
 const tabs = [
   { text: t('settings.tabs.vuetorrent.title'), value: 'vuetorrent' },
@@ -55,7 +58,7 @@ const innerTabV = ref('general')
 const isEnhancedEdition = computed(() => preferenceStore.preferences && Object.keys(preferenceStore.preferences).includes('public_trackers'))
 
 async function saveSettings() {
-  if (vueTorrentStore.hasUnsavedBlockedExtensions) {
+  if (vueTorrentStore.hasUnsavedChanges) {
     vueTorrentStore.commitDraftBlockedExtensions()
   }
   await preferenceStore.setPreferences()
@@ -75,10 +78,10 @@ async function saveSettings() {
 }
 
 function confirmUnsavedChanges(onConfirm: () => void) {
-  if (vueTorrentStore.hasUnsavedBlockedExtensions) {
+  if (vueTorrentStore.hasUnsavedChanges) {
     dialogStore.confirmAction({
       title: t('dialogs.confirm.unsavedChanges') || 'Unsaved Changes',
-      text: 'You have unsaved changes to your file exclusions. Are you sure you want to discard them and leave?',
+      text: 'You have unsaved changes to your settings. Are you sure you want to discard them and leave?',
       yesText: 'Discard & Leave',
       yesColor: 'error',
       noText: 'Stay',
@@ -99,10 +102,10 @@ function goHome() {
 }
 
 onBeforeRouteLeave((_to, _from, next) => {
-  if (vueTorrentStore.hasUnsavedBlockedExtensions) {
+  if (vueTorrentStore.hasUnsavedChanges) {
     dialogStore.confirmAction({
       title: 'Unsaved Changes',
-      text: 'You have unsaved changes to your file exclusions. Are you sure you want to discard them and leave?',
+      text: 'You have unsaved changes to your settings. Are you sure you want to discard them and leave?',
       yesText: 'Discard & Leave',
       yesColor: 'error',
       noText: 'Stay',
@@ -155,98 +158,117 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="pa-3">
-    <div class="d-flex align-center">
-      <div class="text-headline-medium ml-2">
-        {{ t('settings.title') }}
+  <div class="px-3 pb-3" :style="{ '--settings-sticky-h': `${stickyHeaderHeight}px` }">
+    <div ref="stickyHeader" class="settings-sticky bg-background pt-3">
+      <div class="d-flex align-center">
+        <div class="text-headline-medium ml-2">
+          {{ t('settings.title') }}
+        </div>
+        <v-spacer />
+        <div class="d-flex justify-end">
+          <v-badge :model-value="vueTorrentStore.hasUnsavedChanges" dot color="warning" class="mr-1">
+            <v-btn color="accent" icon="mdi-content-save" variant="plain" @click="saveSettings" />
+          </v-badge>
+          <v-btn icon="mdi-close" variant="plain" @click="goHome" />
+        </div>
       </div>
-      <v-spacer />
-      <div class="d-flex justify-end">
-        <v-badge :model-value="vueTorrentStore.hasUnsavedBlockedExtensions" dot color="warning" class="mr-1">
-          <v-btn color="accent" icon="mdi-content-save" variant="plain" @click="saveSettings" />
-        </v-badge>
-        <v-btn icon="mdi-close" variant="plain" @click="goHome" />
-      </div>
+
+      <v-row class="ma-0 pa-0">
+        <v-tabs v-model="tab" bg-color="primary" grow show-arrows>
+          <v-tab
+            v-if="isEnhancedEdition"
+            value="enhancedEdition"
+            :text="t('settings.tabs.addons.enhanced_edition')"
+            replace
+            :to="{ name: 'settings', params: { tab: 'enhancedEdition' } }" />
+          <v-tab v-for="{ text, value } in tabs" :key="value" :value="value" :text="text" replace :to="{ name: 'settings', params: { tab: value } }" />
+        </v-tabs>
+      </v-row>
     </div>
 
-    <v-row class="ma-0 pa-0">
-      <v-tabs v-model="tab" bg-color="primary" grow show-arrows>
-        <v-tab
-          v-if="isEnhancedEdition"
-          value="enhancedEdition"
-          :text="t('settings.tabs.addons.enhanced_edition')"
-          replace
-          :to="{ name: 'settings', params: { tab: 'enhancedEdition' } }" />
-        <v-tab v-for="{ text, value } in tabs" :key="value" :value="value" :text="text" replace :to="{ name: 'settings', params: { tab: value } }" />
-      </v-tabs>
-    </v-row>
-
-    <v-window v-model="tab" :touch="false">
-      <v-window-item value="enhancedEdition" :transition="keepDefaultTransitions" :reverse-transition="keepDefaultTransitions">
+    <v-window v-model="tab" class="settings-window" :touch="false">
+      <v-window-item value="enhancedEdition" :transition="false" :reverse-transition="false">
         <EnhancedEdition />
       </v-window-item>
 
-      <v-window-item value="vuetorrent" :transition="keepDefaultTransitions" :reverse-transition="keepDefaultTransitions">
-        <v-tabs v-model="innerTabV" grow color="accent" show-arrows>
+      <v-window-item value="vuetorrent" :transition="false" :reverse-transition="false">
+        <v-tabs v-model="innerTabV" class="settings-sticky-sub" bg-color="surface" grow color="accent" show-arrows>
           <v-tab v-for="{ text, value } in tabsV" :key="value" :value="value" :text="text" replace :to="{ name: 'settings', params: { tab: 'vuetorrent', subtab: value } }" />
         </v-tabs>
 
         <v-window v-model="innerTabV" :touch="false">
-          <v-window-item value="general" :transition="keepDefaultTransitions" :reverse-transition="keepDefaultTransitions">
+          <v-window-item value="general" :transition="false" :reverse-transition="false">
             <VGeneral />
           </v-window-item>
-          <v-window-item value="torrentCardList" :transition="keepDefaultTransitions" :reverse-transition="keepDefaultTransitions">
+          <v-window-item value="torrentCardList" :transition="false" :reverse-transition="false">
             <VTorrentCardList />
           </v-window-item>
-          <v-window-item value="torrentCardGrid" :transition="keepDefaultTransitions" :reverse-transition="keepDefaultTransitions">
+          <v-window-item value="torrentCardGrid" :transition="false" :reverse-transition="false">
             <VTorrentCardGrid />
           </v-window-item>
-          <v-window-item value="torrentCardTable" :transition="keepDefaultTransitions" :reverse-transition="keepDefaultTransitions">
+          <v-window-item value="torrentCardTable" :transition="false" :reverse-transition="false">
             <VTorrentCardTable />
           </v-window-item>
-          <v-window-item value="sidebar" :transition="keepDefaultTransitions" :reverse-transition="keepDefaultTransitions">
+          <v-window-item value="sidebar" :transition="false" :reverse-transition="false">
             <VSidebar />
           </v-window-item>
         </v-window>
       </v-window-item>
 
-      <v-window-item value="behavior" :transition="keepDefaultTransitions" :reverse-transition="keepDefaultTransitions">
+      <v-window-item value="behavior" :transition="false" :reverse-transition="false">
         <Behavior />
       </v-window-item>
 
-      <v-window-item value="downloads" :transition="keepDefaultTransitions" :reverse-transition="keepDefaultTransitions">
+      <v-window-item value="downloads" :transition="false" :reverse-transition="false">
         <Downloads />
       </v-window-item>
 
-      <v-window-item value="connection" :transition="keepDefaultTransitions" :reverse-transition="keepDefaultTransitions">
+      <v-window-item value="connection" :transition="false" :reverse-transition="false">
         <Connection />
       </v-window-item>
 
-      <v-window-item value="speed" :transition="keepDefaultTransitions" :reverse-transition="keepDefaultTransitions">
+      <v-window-item value="speed" :transition="false" :reverse-transition="false">
         <Speed />
       </v-window-item>
 
-      <v-window-item value="bittorrent" :transition="keepDefaultTransitions" :reverse-transition="keepDefaultTransitions">
+      <v-window-item value="bittorrent" :transition="false" :reverse-transition="false">
         <BitTorrent />
       </v-window-item>
 
-      <v-window-item value="rss" :transition="keepDefaultTransitions" :reverse-transition="keepDefaultTransitions">
+      <v-window-item value="rss" :transition="false" :reverse-transition="false">
         <RSS />
       </v-window-item>
 
-      <v-window-item value="webui" :transition="keepDefaultTransitions" :reverse-transition="keepDefaultTransitions">
+      <v-window-item value="webui" :transition="false" :reverse-transition="false">
         <WebUI />
       </v-window-item>
 
-      <v-window-item value="tagsAndCategories" :transition="keepDefaultTransitions" :reverse-transition="keepDefaultTransitions">
+      <v-window-item value="tagsAndCategories" :transition="false" :reverse-transition="false">
         <TagsAndCategories />
       </v-window-item>
 
-      <v-window-item value="advanced" :transition="keepDefaultTransitions" :reverse-transition="keepDefaultTransitions">
+      <v-window-item value="advanced" :transition="false" :reverse-transition="false">
         <Advanced />
       </v-window-item>
     </v-window>
   </div>
 </template>
 
-<style scoped></style>
+<style scoped>
+.settings-sticky {
+  position: sticky;
+  top: var(--v-layout-top, 0px);
+  z-index: 5;
+}
+
+.settings-sticky-sub {
+  position: sticky;
+  top: calc(var(--v-layout-top, 0px) + var(--settings-sticky-h, 0px));
+  z-index: 4;
+}
+
+/* 'clip' still hides slide transitions but, unlike 'hidden', doesn't become the scroll container that sticky children bind to */
+.settings-window {
+  overflow: clip;
+}
+</style>

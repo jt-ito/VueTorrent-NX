@@ -1,7 +1,9 @@
 <script setup lang="ts">
+import { useElementSize } from '@vueuse/core'
 import { storeToRefs } from 'pinia'
-import { computed, onBeforeUnmount, onMounted, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
+import { useDisplay } from 'vuetify'
 import RightClickMenu from '@/components/Core/RightClickMenu'
 import Content from '@/components/TorrentDetail/Content'
 import Info from '@/components/TorrentDetail/Info/Info.vue'
@@ -14,6 +16,7 @@ import { TorrentDetailTab } from '@/constants/vuetorrent'
 import { useContentStore, useDialogStore, useGlobalStore, useTorrentDetailStore, useTorrentStore, useVueTorrentStore } from '@/stores'
 
 const router = useRouter()
+const { mobile } = useDisplay()
 const { t } = useI18nUtils()
 const contentStore = useContentStore()
 const dialogStore = useDialogStore()
@@ -22,6 +25,10 @@ const torrentStore = useTorrentStore()
 const torrentDetailStore = useTorrentDetailStore()
 const { tab } = storeToRefs(torrentDetailStore)
 const { keepDefaultTransitions, defaultTorrentDetailTab } = storeToRefs(useVueTorrentStore())
+
+// Header + tabs stay pinned while scrolling; tab-level search bars stick just below them (see .detail-sticky-search)
+const stickyHeader = ref<HTMLElement>()
+const { height: stickyHeaderHeight } = useElementSize(stickyHeader, undefined, { box: 'border-box' })
 
 const tabs = [
   { text: t('torrentDetail.tabs.overview'), value: TorrentDetailTab.OVERVIEW },
@@ -103,28 +110,34 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="pa-3 text-select">
-    <div class="d-flex align-center">
-      <div class="text-headline-medium ml-2 text-truncate">
-        {{ torrent?.name ?? t('torrentDetail.error.title') }}
+  <div class="px-3 pb-3 text-select" :style="{ '--detail-sticky-h': `${stickyHeaderHeight}px` }">
+    <div ref="stickyHeader" class="detail-sticky bg-background pt-3">
+      <div class="d-flex align-center">
+        <v-tooltip :text="torrent?.name" :disabled="!torrent?.name" location="bottom" max-width="90vw" content-class="text-break" :open-on-hover="!mobile" :open-on-click="mobile">
+          <template #activator="{ props: tooltipProps }">
+            <div v-bind="tooltipProps" class="text-headline-medium ml-2 text-truncate">
+              {{ torrent?.name ?? t('torrentDetail.error.title') }}
+            </div>
+          </template>
+        </v-tooltip>
+        <v-spacer />
+        <div class="d-flex justify-end">
+          <v-btn :disabled="isTorrentFilterEmpty || isFirstTorrent" icon="mdi-skip-previous" variant="plain" @click="goToFirstTorrent" />
+          <v-btn :disabled="isTorrentNotInFilter || isFirstTorrent" icon="mdi-arrow-left" variant="plain" @click="goToPreviousTorrent" />
+          <v-btn :disabled="isTorrentNotInFilter || isLastTorrent" icon="mdi-arrow-right" variant="plain" @click="goToNextTorrent" />
+          <v-btn :disabled="isTorrentFilterEmpty || isLastTorrent" icon="mdi-skip-next" variant="plain" @click="goToLastTorrent" />
+          <v-btn icon="mdi-close" variant="plain" @click="goHome" />
+        </div>
       </div>
-      <v-spacer />
-      <div class="d-flex justify-end">
-        <v-btn :disabled="isTorrentFilterEmpty || isFirstTorrent" icon="mdi-skip-previous" variant="plain" @click="goToFirstTorrent" />
-        <v-btn :disabled="isTorrentNotInFilter || isFirstTorrent" icon="mdi-arrow-left" variant="plain" @click="goToPreviousTorrent" />
-        <v-btn :disabled="isTorrentNotInFilter || isLastTorrent" icon="mdi-arrow-right" variant="plain" @click="goToNextTorrent" />
-        <v-btn :disabled="isTorrentFilterEmpty || isLastTorrent" icon="mdi-skip-next" variant="plain" @click="goToLastTorrent" />
-        <v-btn icon="mdi-close" variant="plain" @click="goHome" />
-      </div>
+
+      <v-row class="ma-0 pa-0">
+        <v-tabs v-model="tab" bg-color="primary" grow show-arrows>
+          <v-tab v-for="{ text, value } in tabs" :key="value" :value="value" :text="text" replace :to="{ name: 'torrentDetail', params: { hash, tab: value } }" />
+        </v-tabs>
+      </v-row>
     </div>
 
-    <v-row class="ma-0 pa-0">
-      <v-tabs v-model="tab" bg-color="primary" grow show-arrows>
-        <v-tab v-for="{ text, value } in tabs" :key="value" :value="value" :text="text" replace :to="{ name: 'torrentDetail', params: { hash, tab: value } }" />
-      </v-tabs>
-    </v-row>
-
-    <v-window v-if="torrent" v-model="tab" :touch="false">
+    <v-window v-if="torrent" v-model="tab" class="detail-window" :touch="false">
       <v-window-item :value="TorrentDetailTab.OVERVIEW" :transition="keepDefaultTransitions" :reverse-transition="keepDefaultTransitions">
         <Overview :torrent="torrent" :is-active="tab === TorrentDetailTab.OVERVIEW" />
       </v-window-item>
@@ -152,3 +165,16 @@ onBeforeUnmount(() => {
     <RightClickMenu v-model="contentStore.rightClickProperties.isVisible" :menu-data="contentStore.menuData" />
   </div>
 </template>
+
+<style scoped>
+.detail-sticky {
+  position: sticky;
+  top: var(--v-layout-top, 0px);
+  z-index: 5;
+}
+
+/* 'clip' still hides slide transitions but, unlike 'hidden', doesn't become the scroll container that sticky children bind to */
+.detail-window {
+  overflow: clip;
+}
+</style>

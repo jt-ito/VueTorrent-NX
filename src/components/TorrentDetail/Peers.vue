@@ -141,11 +141,11 @@ onBeforeRouteUpdate(() => !addPeersDialog.value)
 </script>
 
 <template>
-  <v-card>
+  <v-card class="detail-sticky-host">
     <v-empty-state v-if="!torrentPeers.size" :title="$t('torrentDetail.peers.empty')" icon="mdi-account-sync" color="accent" />
     <v-data-table v-else :headers="headers" :items="items" multi-sort :sort-by="sortBy" :search="filter" :filter-keys="['host', 'client', 'files']" :mobile="null">
       <template #top>
-        <div class="mt-2 mx-3 d-flex flex-gap align-center">
+        <div class="detail-sticky-search bg-surface pt-2 px-3 d-flex flex-gap align-center">
           <v-text-field v-model="filter" density="compact" :label="$t('common.search')" prepend-inner-icon="mdi-magnify" flat hide-details single-line clearable />
 
           <v-tooltip :text="isTimerActive ? $t('common.pause') : $t('common.resume')" location="bottom">

@@ -6,6 +6,7 @@ export default {
   clearOnUrlChange: false,
   containerId: toast.POSITION.BOTTOM_RIGHT,
   limit: 5,
+  pauseOnFocusLoss: false, // otherwise toasts never time out while the tab is in the background
   position: toast.POSITION.BOTTOM_RIGHT,
   theme: toast.THEME.COLORED,
 } as ToastContainerOptions

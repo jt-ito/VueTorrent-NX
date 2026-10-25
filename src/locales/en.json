@@ -1243,6 +1243,15 @@
             "cleared": "API key cleared — will use session login"
           }
         },
+        "sortSelectMode": {
+          "label": "Sort menu selection",
+          "none": "Click only (no checkboxes)",
+          "none_hint": "No checkboxes. Clicking an item sorts by only that item. Shift/Ctrl/Cmd-click adds or removes items for multi-sort.",
+          "both": "Click and checkboxes",
+          "both_hint": "Clicking an item sorts by only that item. Ticking its checkbox, or Shift/Ctrl/Cmd-clicking, adds or removes it for multi-sort.",
+          "checkbox": "Checkboxes only (click toggles)",
+          "checkbox_hint": "Clicking an item adds or removes it, so you can pick several without holding a key. The menu stays open."
+        },
         "useBinarySize": "Replace data sizes by binary units (kB -> KiB)",
         "useBitSpeed": "Replace speed values by bits (kB/s -> kbps)",
         "useEmojiState": "Prepend torrent states with emojis",

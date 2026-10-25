@@ -1,11 +1,11 @@
 <script setup lang="ts">
 import { storeToRefs } from 'pinia'
-import { computed, mergeProps } from 'vue'
+import { computed, mergeProps, ref, watch } from 'vue'
 import TorrentSearchbar from '@/components/TorrentSearchbar.vue'
 import { useI18nUtils } from '@/composables'
 import { DashboardDisplayMode } from '@/constants/vuetorrent'
 import { comparators } from '@/helpers'
-import { useDashboardStore, useNavbarStore, useTorrentStore } from '@/stores'
+import { useDashboardStore, useNavbarStore, useTorrentStore, useVueTorrentStore } from '@/stores'
 import { Torrent } from '@/types/vuetorrent'
 
 const { t } = useI18nUtils()
@@ -14,7 +14,17 @@ const dashboardStore = useDashboardStore()
 const { torrentCountString, isSelectionMultiple, displayMode } = storeToRefs(dashboardStore)
 const { isDrawerOpen } = storeToRefs(useNavbarStore())
 const torrentStore = useTorrentStore()
-const { sortCriterias } = storeToRefs(torrentStore)
+const { sortSelectMode } = storeToRefs(useVueTorrentStore())
+const { sortCriterias: storeCriterias } = storeToRefs(torrentStore)
+
+// Local copy so the menu updates instantly; the (expensive) list re-sort is applied on a later tick
+const sortCriterias = ref(storeCriterias.value)
+watch(storeCriterias, v => (sortCriterias.value = v))
+watch(sortCriterias, v => {
+  setTimeout(() => {
+    if (storeCriterias.value !== v) storeCriterias.value = v
+  })
+})
 
 type SortOption = { title: string; value: keyof Torrent }
 
@@ -83,12 +93,42 @@ const sortOption = computed({
   },
 })
 
+const sortMenuOpen = ref(false)
+
+const selectedSortTitle = computed(() =>
+  sortCriterias.value.map(c => torrentSortOptions.find(o => o.value === c.value)?.title ?? c.value).join(', ')
+)
+
+function sortIndex(value: keyof Torrent) {
+  return sortCriterias.value.findIndex(c => c.value === value)
+}
+
+// One direction applies to every sort key
 function inverseSort() {
-  sortOption.value = { value: sortOption.value.value, reverse: !sortOption.value.reverse }
+  const reverse = !sortOption.value.reverse
+  sortCriterias.value = sortCriterias.value.map(c => ({ ...c, reverse }))
 }
 
 function setSortOption(value: keyof Torrent) {
   sortOption.value = { value, reverse: sortOption.value.reverse }
+}
+
+function toggleSortOption(value: keyof Torrent) {
+  const i = sortIndex(value)
+  if (i === -1) {
+    sortCriterias.value = [...sortCriterias.value, { value, reverse: sortOption.value.reverse }]
+  } else if (sortCriterias.value.length > 1) {
+    sortCriterias.value = sortCriterias.value.filter((_, j) => j !== i)
+  }
+}
+
+function onSortItemClick(value: keyof Torrent, e: MouseEvent | KeyboardEvent) {
+  if (sortSelectMode.value === 'checkbox' || e.shiftKey || e.ctrlKey || e.metaKey) {
+    toggleSortOption(value)
+  } else {
+    setSortOption(value)
+    sortMenuOpen.value = false
+  }
 }
 
 function toggleSelectMode() {
@@ -132,14 +172,28 @@ function toggleSelectMode() {
     </v-tooltip>
     <div class="d-flex align-center pl-2">
       <v-select
+        v-model:menu="sortMenuOpen"
         :model-value="sortOption.value"
         :items="torrentSortOptions"
         :label="t('dashboard.sortLabel')"
         density="compact"
         hide-details
         variant="solo-filled"
-        :style="`width: ${$vuetify.display.xs || ($vuetify.display.sm && isDrawerOpen) ? 140 : 260}px`"
-        @update:model-value="setSortOption" />
+        :style="`width: ${$vuetify.display.xs || ($vuetify.display.sm && isDrawerOpen) ? 140 : 260}px`">
+        <template #selection>
+          <span class="text-truncate">{{ selectedSortTitle }}</span>
+        </template>
+        <template #item="{ item, props }">
+          <v-list-item v-bind="{ ...props, onClick: undefined }" @click="onSortItemClick(item.value, $event)">
+            <template #prepend>
+              <v-checkbox-btn v-if="sortSelectMode !== 'none'" :model-value="sortIndex(item.value) !== -1" density="compact" class="mr-2" @click.stop="toggleSortOption(item.value)" />
+            </template>
+            <template v-if="sortCriterias.length > 1 && sortIndex(item.value) !== -1" #append>
+              <v-badge inline color="primary" :content="sortIndex(item.value) + 1" />
+            </template>
+          </v-list-item>
+        </template>
+      </v-select>
     </div>
 
     <v-spacer />

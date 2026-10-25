@@ -47,6 +47,16 @@ export const useVueTorrentStore = defineStore(
     const useBitSpeed = ref(false)
     const expandContent = ref(true)
     const useBinarySize = ref(false)
+    const sortSelectMode = ref<'none' | 'both' | 'checkbox'>('none')
+    // Fork-added settings edited on the settings page; held here until the user saves
+    type DraftSettings = {
+      sortSelectMode: typeof sortSelectMode.value
+      showPredownloadPicker: boolean
+      skipPickerForSingleFile: boolean
+      keepAliveEnabled: boolean
+      vueTorrentApiKey: string
+    }
+    const draftSettings = ref<Partial<DraftSettings>>({})
     const refreshInterval = ref(2000)
     const fileContentInterval = ref(5000)
     const useIdForRssLinks = ref(false)
@@ -79,6 +89,30 @@ export const useVueTorrentStore = defineStore(
       return !areArraysEqual(blockedExtensions.value, draftBlockedExtensions.value)
     })
 
+    // Lazy: some of these refs are declared further down
+    const draftTargets = () => ({ sortSelectMode, showPredownloadPicker, skipPickerForSingleFile, keepAliveEnabled, vueTorrentApiKey })
+
+    const hasUnsavedDraftSettings = computed(() => {
+      const targets = draftTargets()
+      return (Object.keys(draftSettings.value) as (keyof DraftSettings)[]).some(k => draftSettings.value[k] !== targets[k].value)
+    })
+
+    const hasUnsavedChanges = computed(() => hasUnsavedBlockedExtensions.value || hasUnsavedDraftSettings.value)
+
+    function commitDraftSettings() {
+      const targets = draftTargets() as Record<keyof DraftSettings, { value: unknown }>
+      const draft = draftSettings.value
+      const keyChanged = draft.vueTorrentApiKey !== undefined && draft.vueTorrentApiKey.trim() !== vueTorrentApiKey.value
+      for (const k of Object.keys(draft) as (keyof DraftSettings)[]) {
+        targets[k].value = k === 'vueTorrentApiKey' ? draft[k]!.trim() : draft[k]
+      }
+      draftSettings.value = {}
+      if (keyChanged) {
+        if (vueTorrentApiKey.value) qbit.setApiKey(vueTorrentApiKey.value)
+        else qbit.clearApiKey()
+      }
+    }
+
     function initDraftBlockedExtensions() {
       draftBlockedExtensions.value = [...blockedExtensions.value]
     }
@@ -95,6 +129,7 @@ export const useVueTorrentStore = defineStore(
     }
 
     function commitDraftBlockedExtensions() {
+      commitDraftSettings()
       blockedExtensions.value = [...draftBlockedExtensions.value]
       if (preferenceStore.preferences) {
         const { finalGlobsStr, newPushedGlobs } = reconcileNativeExcludedFiles(
@@ -109,6 +144,7 @@ export const useVueTorrentStore = defineStore(
     }
 
     function revertDraftBlockedExtensions() {
+      draftSettings.value = {}
       draftBlockedExtensions.value = [...blockedExtensions.value]
       if (preferenceStore.preferences) {
         const { finalGlobsStr } = reconcileNativeExcludedFiles(
@@ -432,6 +468,9 @@ export const useVueTorrentStore = defineStore(
       uiTitleType,
       uiTitleCustom,
       useBinarySize,
+      sortSelectMode,
+      draftSettings,
+      hasUnsavedChanges,
       useBitSpeed,
       useIdForRssLinks,
       hideColoredChip,
@@ -509,6 +548,8 @@ export const useVueTorrentStore = defineStore(
         isShutdownButtonVisible.value = false
         useBitSpeed.value = false
         useBinarySize.value = false
+        sortSelectMode.value = 'none'
+        draftSettings.value = {}
         refreshInterval.value = 2000
         fileContentInterval.value = 5000
         useIdForRssLinks.value = false

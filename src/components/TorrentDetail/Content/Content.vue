@@ -141,8 +141,8 @@ function handleKeyboardInput(e: KeyboardEvent) {
 </script>
 
 <template>
-  <v-card>
-    <div class="mt-2 mx-3 d-flex flex-gap align-center">
+  <v-card class="detail-sticky-host">
+    <div class="detail-sticky-search bg-surface pt-2 px-3 d-flex flex-gap align-center">
       <v-text-field v-model="filenameFilter" hide-details clearable :placeholder="$t('torrentDetail.content.filter_placeholder')" @keydown.stop />
 
       <v-tooltip :text="$t('torrentDetail.content.filter.activator')" location="bottom">

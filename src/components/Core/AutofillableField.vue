@@ -98,6 +98,7 @@ input {
   border: 0;
   box-shadow: none;
   color: inherit;
+  font-size: 16px; /* below 16px, iOS Safari zooms the page in on focus and never zooms back out */
   min-width: 0;
   outline: none;
 }

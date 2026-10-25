@@ -9,6 +9,8 @@ import { useNavbarStore } from '@/stores'
 const router = useRouter()
 const { isDrawerOpen } = storeToRefs(useNavbarStore())
 
+const iconUrl = `${import.meta.env.BASE_URL}icon.svg`
+
 function toggleDrawer() {
   isDrawerOpen.value = !isDrawerOpen.value
 }
@@ -24,6 +26,8 @@ function goHome() {
     <div class="title-wrapper cursor-pointer" @click="goHome">
       <span v-if="$vuetify.display.smAndUp" class="text-accent">Vue</span>
       <span v-if="$vuetify.display.smAndUp">Torrent</span>
+      <!-- Not enough room for the text title on phones: show the app icon instead -->
+      <img v-else :src="iconUrl" alt="VueTorrent" height="28" />
     </div>
 
     <ActiveFilters />

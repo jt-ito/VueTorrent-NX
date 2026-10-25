@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { storeToRefs } from 'pinia'
-import { computed, onMounted, readonly, ref } from 'vue'
+import { computed, mergeProps, onMounted, readonly, ref } from 'vue'
 import { toast } from 'vue3-toastify'
 import ImportSettingsDialog from '@/components/Dialogs/ImportSettingsDialog.vue'
 import { useI18nUtils } from '@/composables'
@@ -23,20 +23,9 @@ const vueTorrentStore = useVueTorrentStore()
 const preferenceStore = usePreferenceStore()
 
 // ── Feature 3: API key management ────────────────────────────────────────────
-const apiKeyInput = ref(vueTorrentStore.vueTorrentApiKey)
+const apiKeyInput = draftModel('vueTorrentApiKey')
 const showApiKey = ref(false)
 const isHttpsOrLocalhost = window.location.protocol === 'https:' || window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
-
-function applyApiKey() {
-  vueTorrentStore.vueTorrentApiKey = apiKeyInput.value.trim()
-  if (vueTorrentStore.vueTorrentApiKey) {
-    qbit.setApiKey(vueTorrentStore.vueTorrentApiKey)
-    toast.success(t('settings.vuetorrent.general.torrent_adding.apiKey.applied'))
-  } else {
-    qbit.clearApiKey()
-    toast.success(t('settings.vuetorrent.general.torrent_adding.apiKey.cleared'))
-  }
-}
 
 async function copyApiKey() {
   if (!apiKeyInput.value) return
@@ -157,6 +146,24 @@ const titleOptionsList = readonly([
   { title: t('constants.titleOptions.global_speed'), value: TitleOptions.GLOBAL_SPEED },
   { title: t('constants.titleOptions.first_torrent_speed'), value: TitleOptions.FIRST_TORRENT_STATUS },
   { title: t('constants.titleOptions.custom'), value: TitleOptions.CUSTOM }
+])
+
+// Two-way binding to a setting that is only committed when the user presses Save
+function draftModel<K extends keyof typeof vueTorrentStore.draftSettings>(key: K) {
+  return computed({
+    get: () => (vueTorrentStore.draftSettings[key] ?? vueTorrentStore[key as keyof typeof vueTorrentStore]) as NonNullable<(typeof vueTorrentStore.draftSettings)[K]>,
+    set: v => (vueTorrentStore.draftSettings[key] = v)
+  })
+}
+const sortSelectModeModel = draftModel('sortSelectMode')
+const showPredownloadPickerModel = draftModel('showPredownloadPicker')
+const skipPickerForSingleFileModel = draftModel('skipPickerForSingleFile')
+const keepAliveEnabledModel = draftModel('keepAliveEnabled')
+
+const sortSelectModes = readonly([
+  { title: t('settings.vuetorrent.general.sortSelectMode.none'), value: 'none', hint: t('settings.vuetorrent.general.sortSelectMode.none_hint') },
+  { title: t('settings.vuetorrent.general.sortSelectMode.both'), value: 'both', hint: t('settings.vuetorrent.general.sortSelectMode.both_hint') },
+  { title: t('settings.vuetorrent.general.sortSelectMode.checkbox'), value: 'checkbox', hint: t('settings.vuetorrent.general.sortSelectMode.checkbox_hint') }
 ])
 
 const filterInclusionOptions = [
@@ -381,6 +388,18 @@ function openDurationFormatHelp() {
           <v-select v-model="vueTorrentStore.theme.dark" flat hide-details :items="darkVariants" :label="$t('settings.vuetorrent.general.darkVariants')" />
         </v-col>
 
+        <v-col cols="12" md="6">
+          <v-select v-model="sortSelectModeModel" flat hide-details :items="sortSelectModes" :label="t('settings.vuetorrent.general.sortSelectMode.label')">
+            <template #item="{ item, props }">
+              <v-tooltip :text="item.hint" location="end" open-delay="300">
+                <template #activator="{ props: tooltip }">
+                  <v-list-item v-bind="mergeProps(props, tooltip)" />
+                </template>
+              </v-tooltip>
+            </template>
+          </v-select>
+        </v-col>
+
         <v-col cols="12" md="3">
           <v-select v-model="vueTorrentStore.defaultTorrentDetailTab" flat hide-details :items="torrentDetailTabs" :label="t('settings.vuetorrent.general.defaultTorrentDetailTab')" />
         </v-col>
@@ -495,7 +514,7 @@ function openDurationFormatHelp() {
         <!-- Feature 1: Pre-download file picker toggle -->
         <v-col cols="12">
           <v-checkbox
-            v-model="vueTorrentStore.showPredownloadPicker"
+            v-model="showPredownloadPickerModel"
             hide-details
             :label="t('settings.vuetorrent.general.torrent_adding.show_picker')" />
           <div class="text-caption text-grey ml-10">
@@ -503,9 +522,9 @@ function openDurationFormatHelp() {
           </div>
         </v-col>
         <v-expand-transition>
-          <v-col v-if="vueTorrentStore.showPredownloadPicker" cols="12" class="pt-0">
+          <v-col v-if="showPredownloadPickerModel" cols="12" class="pt-0">
             <v-checkbox
-              v-model="vueTorrentStore.skipPickerForSingleFile"
+              v-model="skipPickerForSingleFileModel"
               hide-details
               :label="t('settings.vuetorrent.general.torrent_adding.skip_single_file')" />
             <div class="text-caption text-grey ml-10">
@@ -628,7 +647,7 @@ function openDurationFormatHelp() {
         <!-- Feature 3: Keep-alive toggle -->
         <v-col cols="12">
           <v-checkbox
-            v-model="vueTorrentStore.keepAliveEnabled"
+            v-model="keepAliveEnabledModel"
             hide-details
             :label="t('settings.vuetorrent.general.torrent_adding.keep_alive')" />
           <div class="text-caption text-grey ml-10">
@@ -661,13 +680,10 @@ function openDurationFormatHelp() {
             Setting an API key over a plaintext HTTP connection is unsafe and has been disabled. Access VueTorrent via HTTPS.
           </div>
           <div class="d-flex ga-2 mt-2">
-            <v-btn size="small" variant="tonal" color="accent" prepend-icon="mdi-check" :disabled="!isHttpsOrLocalhost" @click="applyApiKey">
-              {{ t('settings.vuetorrent.general.torrent_adding.apiKey.apply') }}
-            </v-btn>
             <v-btn size="small" variant="tonal" prepend-icon="mdi-content-copy" :disabled="!apiKeyInput" @click="copyApiKey">
               {{ t('common.copy') }}
             </v-btn>
-            <v-btn size="small" variant="tonal" color="error" prepend-icon="mdi-delete" :disabled="!apiKeyInput" @click="apiKeyInput = ''; applyApiKey()">
+            <v-btn size="small" variant="tonal" color="error" prepend-icon="mdi-delete" :disabled="!apiKeyInput" @click="apiKeyInput = ''">
               {{ t('common.delete') }}
             </v-btn>
           </div>

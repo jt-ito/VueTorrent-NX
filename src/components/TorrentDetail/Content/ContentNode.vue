@@ -124,9 +124,14 @@ function getNodeSubtitle(node: TreeNode) {
 
       <!-- Node content -->
       <div class="d-flex flex-column overflow-hidden text-no-wrap mr-3">
-        <div :class="`text-${getNodeColor(node)}`">
-          {{ node.name }}
-        </div>
+        <!-- Names are truncated in the row: hover (desktop) or tap (mobile) shows the full name -->
+        <v-tooltip :text="node.name" :disabled="!node.name" location="top" max-width="90vw" content-class="text-break" :open-on-hover="!mobile" :open-on-click="mobile">
+          <template #activator="{ props: tooltipProps }">
+            <div v-bind="tooltipProps" :class="`text-${getNodeColor(node)}`">
+              {{ node.name }}
+            </div>
+          </template>
+        </v-tooltip>
         <div class="text-grey">
           {{ getNodeSubtitle(node) }}
         </div>

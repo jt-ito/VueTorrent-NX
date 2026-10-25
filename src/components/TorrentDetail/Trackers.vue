@@ -158,12 +158,12 @@ onBeforeRouteUpdate(() => !addTrackersDialog.value && !editTrackerDialog.isVisib
 </script>
 
 <template>
-  <v-card>
+  <v-card class="detail-sticky-host">
     <v-empty-state v-if="!torrentTrackers.length && loading" :title="$t('torrentDetail.trackers.loading')" icon="mdi-web-sync" color="accent" />
     <v-empty-state v-else-if="!torrentTrackers.length && isError" :title="$t('torrentDetail.trackers.error')" icon="mdi-web-remove" color="error" />
     <v-data-table v-else :headers="headers" :items="torrentTrackers" multi-sort :sort-by="sortBy" :search="filter" :filter-keys="['url', 'msg']" :mobile="null">
       <template #top>
-        <div class="mt-2 mx-3 d-flex flex-gap align-center">
+        <div class="detail-sticky-search bg-surface pt-2 px-3 d-flex flex-gap align-center">
           <v-text-field v-model="filter" density="compact" :label="$t('common.search')" prepend-inner-icon="mdi-magnify" flat hide-details single-line clearable />
 
           <v-tooltip :text="isTimerActive ? $t('common.pause') : $t('common.resume')" location="bottom">

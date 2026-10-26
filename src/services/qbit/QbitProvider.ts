@@ -1,6 +1,8 @@
 import type { AxiosInstance, AxiosRequestConfig } from 'axios'
 import axios, { AxiosResponse } from 'axios'
 import type IProvider from './IProvider'
+import { logRequestProblem } from './requestLog'
+import { addDefaultGetTimeout } from './requestTimeout'
 import type { FilePriority } from '@/constants/qbit'
 import { DirectoryContentMode, LogType, PieceState } from '@/constants/qbit'
 import type {
@@ -41,6 +43,7 @@ export default class QBitProvider implements IProvider {
     })
 
     this.axios.defaults.headers.post['Content-Type'] = 'application/x-www-form-urlencoded'
+    addDefaultGetTimeout(this.axios)
 
     // ── 403 response interceptor ──────────────────────────────────────────────
     // On 403: if an API key is set and failed, clear it and let the caller surface
@@ -49,6 +52,7 @@ export default class QBitProvider implements IProvider {
     this.axios.interceptors.response.use(
       res => res,
       async err => {
+        logRequestProblem(err)
         if (err?.response?.status !== 403 || this._retrying) {
           return Promise.reject(err)
         }

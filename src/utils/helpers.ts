@@ -63,3 +63,34 @@ export async function runWithConcurrency<T>(items: T[], limit: number, task: (it
   }
   await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker))
 }
+
+const NAMED_ENTITIES: Record<string, string> = { quot: '"', amp: '&', lt: '<', gt: '>', apos: "'", nbsp: '\u00a0' }
+
+/**
+ * Turns HTML entities that some sources leave in names (e.g. `&quot;` in RSS titles) back into plain characters.
+ * Pure string replacement: nothing is parsed as HTML and the result must only ever be shown as text, never via v-html.
+ * Decodes a single level, so `&amp;quot;` becomes `&quot;`, not `"`.
+ */
+export function decodeHtmlEntities(text: string): string {
+  if (!text || !text.includes('&')) return text
+  return text.replace(/&(?:#(\d{1,7})|#x([0-9a-f]{1,6})|([a-z]+));/gi, (match, dec, hex, name) => {
+    if (name) return NAMED_ENTITIES[name.toLowerCase()] ?? match
+    const codePoint = dec ? parseInt(dec, 10) : parseInt(hex, 16)
+    const isValid = codePoint > 0 && codePoint <= 0x10ffff && !(codePoint >= 0xd800 && codePoint <= 0xdfff)
+    return isValid ? String.fromCodePoint(codePoint) : match
+  })
+}
+
+/**
+ * Returns only the entries of `current` whose value differs from `baseline` (compared by value, one level deep).
+ * Lets a settings form send what the user actually changed instead of a whole, possibly outdated, copy.
+ */
+export function getChangedEntries<T extends Record<string, any>>(current: T, baseline: Partial<T>): Partial<T> {
+  const changed: Partial<T> = {}
+  for (const key of Object.keys(current) as (keyof T)[]) {
+    if (JSON.stringify(current[key]) !== JSON.stringify(baseline[key])) {
+      changed[key] = current[key]
+    }
+  }
+  return changed
+}

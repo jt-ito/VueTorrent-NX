@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { storeToRefs } from 'pinia'
-import { computed, mergeProps, ref, watch } from 'vue'
+import { computed, mergeProps, ref } from 'vue'
 import TorrentSearchbar from '@/components/TorrentSearchbar.vue'
 import { useI18nUtils } from '@/composables'
+import { useDeferredSync } from '@/composables/DeferredSync'
 import { DashboardDisplayMode } from '@/constants/vuetorrent'
 import { comparators } from '@/helpers'
 import { useDashboardStore, useNavbarStore, useTorrentStore, useVueTorrentStore } from '@/stores'
@@ -18,13 +19,7 @@ const { sortSelectMode } = storeToRefs(useVueTorrentStore())
 const { sortCriterias: storeCriterias } = storeToRefs(torrentStore)
 
 // Local copy so the menu updates instantly; the (expensive) list re-sort is applied on a later tick
-const sortCriterias = ref(storeCriterias.value)
-watch(storeCriterias, v => (sortCriterias.value = v))
-watch(sortCriterias, v => {
-  setTimeout(() => {
-    if (storeCriterias.value !== v) storeCriterias.value = v
-  })
-})
+const sortCriterias = useDeferredSync(storeCriterias)
 
 type SortOption = { title: string; value: keyof Torrent }
 
@@ -95,9 +90,7 @@ const sortOption = computed({
 
 const sortMenuOpen = ref(false)
 
-const selectedSortTitle = computed(() =>
-  sortCriterias.value.map(c => torrentSortOptions.find(o => o.value === c.value)?.title ?? c.value).join(', ')
-)
+const selectedSortTitle = computed(() => sortCriterias.value.map(c => torrentSortOptions.find(o => o.value === c.value)?.title ?? c.value).join(', '))
 
 function sortIndex(value: keyof Torrent) {
   return sortCriterias.value.findIndex(c => c.value === value)
@@ -186,7 +179,14 @@ function toggleSelectMode() {
         <template #item="{ item, props }">
           <v-list-item v-bind="{ ...props, onClick: undefined }" @click="onSortItemClick(item.value, $event)">
             <template #prepend>
-              <v-checkbox-btn v-if="sortSelectMode !== 'none'" :model-value="sortIndex(item.value) !== -1" density="compact" class="mr-2" @click.stop="toggleSortOption(item.value)" />
+              <!-- Drawn from the selection (not a native checkbox), so it can never disagree with it, e.g. when the last key can't be removed -->
+              <v-icon
+                v-if="sortSelectMode !== 'none'"
+                :icon="sortIndex(item.value) !== -1 ? 'mdi-checkbox-marked' : 'mdi-checkbox-blank-outline'"
+                class="mr-2"
+                role="checkbox"
+                :aria-checked="sortIndex(item.value) !== -1"
+                @click.stop="toggleSortOption(item.value)" />
             </template>
             <template v-if="sortCriterias.length > 1 && sortIndex(item.value) !== -1" #append>
               <v-badge inline color="primary" :content="sortIndex(item.value) + 1" />

@@ -3,6 +3,7 @@ import { stateQbitToVt } from '@/constants/vuetorrent'
 import { basename, getDomainBody } from '@/helpers'
 import { QbitTorrent } from '@/types/qbit/models'
 import { ShareLimitAction, ShareLimitActionString, Torrent } from '@/types/vuetorrent'
+import { decodeHtmlEntities } from '@/utils/helpers'
 
 export function useTorrentBuilder() {
   function mapShareLimitAction(action: ShareLimitAction | number | ShareLimitActionString | null | undefined): ShareLimitAction {
@@ -56,7 +57,7 @@ export function useTorrentBuilder() {
       infohash_v2: data.infohash_v2,
       last_activity: data.last_activity,
       magnet: data.magnet_uri,
-      name: data.name,
+      name: decodeHtmlEntities(data.name),
       num_leechs: data.num_leechs,
       num_seeds: data.num_seeds,
       popularity: data.popularity,

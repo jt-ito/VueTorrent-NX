@@ -7,6 +7,7 @@ import Feeds from '@/components/RSS/Feeds/Feeds.vue'
 import Rules from '@/components/RSS/Rules/Rules.vue'
 import { useDialogStore, useRssStore } from '@/stores'
 import { RssArticle } from '@/types/vuetorrent'
+import { decodeHtmlEntities } from '@/utils/helpers'
 
 const { height: deviceHeight, mobile } = useDisplay({ mobileBreakpoint: 'md' })
 const route = useRoute()
@@ -30,7 +31,7 @@ const height = computed(() => {
 
 function openRssArticle(article: RssArticle) {
   if (!article.description) return
-  rssDescription.title = article.title.trim()
+  rssDescription.title = decodeHtmlEntities(article.title.trim())
   rssDescription.content = article.description.trim()
   descriptionDialogVisible.value = true
 

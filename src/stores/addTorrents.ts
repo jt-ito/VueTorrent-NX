@@ -1,6 +1,7 @@
 import { acceptHMRUpdate, defineStore } from 'pinia'
 import { computed, reactive, ref, shallowRef, watch } from 'vue'
 import { useAppStore } from './app'
+import { useAppLogStore } from './appLogs'
 import { usePreferenceStore } from './preferences'
 import { useVueTorrentStore } from './vuetorrent'
 import { useDialogStore } from './dialog'
@@ -261,6 +262,7 @@ export const useAddTorrentStore = defineStore(
       const blocked = getBlockedFileIds(torrentFiles, extsToBlock)
       if (blocked.length > 0) {
         await qbit.setTorrentFilePriority(hash, blocked, FilePriority.DO_NOT_DOWNLOAD)
+        useAppLogStore().add('info', 'exclusions', `Deselected ${blocked.length} excluded file(s) in torrent ${hash.slice(0, 8)} (${extsToBlock.join(', ')})`)
       }
       return blocked
     }
@@ -290,6 +292,7 @@ export const useAddTorrentStore = defineStore(
           await qbit.deleteTorrents([hash], true)
           const { default: SingleFileSkippedDialog } = await import('@/components/Dialogs/SingleFileSkippedDialog.vue')
           const dialogStore = useDialogStore()
+          useAppLogStore().add('warning', 'exclusions', `Removed single-file torrent because its file is excluded: ${files[0].name}`)
           dialogStore.createDialog(SingleFileSkippedDialog, { filename: files[0].name })
           return
         }
@@ -329,6 +332,7 @@ export const useAddTorrentStore = defineStore(
             await qbit.deleteTorrents([hash], true)
             const { default: SingleFileSkippedDialog } = await import('@/components/Dialogs/SingleFileSkippedDialog.vue')
             const dialogStore = useDialogStore()
+            useAppLogStore().add('warning', 'exclusions', `Removed single-file torrent because its file is excluded: ${files[0].name}`)
             dialogStore.createDialog(SingleFileSkippedDialog, { filename: files[0].name })
             return true
           }

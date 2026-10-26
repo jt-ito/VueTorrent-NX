@@ -41,23 +41,27 @@ const maindataStore = useMaindataStore()
 
     <UnitCard
       :title="t('navbar.side.performance_stats.read_cache_hits')"
+      class="small-stat"
       :value="maindataStore.serverState?.read_cache_hits ?? 0"
       unit="%"
       color="download"
       icon="mdi-check-circle" />
     <UnitCard
       :title="t('navbar.side.performance_stats.read_cache_overload')"
+      class="small-stat"
       :value="maindataStore.serverState?.read_cache_overload ?? 0"
       unit="%"
       color="download"
       icon="mdi-alert" />
     <DataCard
       :title="t('navbar.side.performance_stats.total_wasted_session')"
+      class="small-stat"
       :value="maindataStore.serverState?.total_wasted_session ?? 0"
       color="warning"
       icon="mdi-recycle-variant" />
     <UnitCard
       :title="t('navbar.side.performance_stats.write_cache_overload')"
+      class="small-stat"
       :value="maindataStore.serverState?.write_cache_overload ?? 0"
       unit="%"
       color="warning"

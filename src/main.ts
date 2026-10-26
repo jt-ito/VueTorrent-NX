@@ -8,6 +8,8 @@ import pinia from './plugins/pinia'
 import router from './plugins/router'
 import toastifyOptions from './plugins/toastify'
 import vuetify from './plugins/vuetify'
+import { useAppLogStore } from './stores/appLogs'
+import { installAppLogCapture } from './utils/appLogCapture'
 
 const app = createApp(App)
 
@@ -20,3 +22,6 @@ document.addEventListener('visibilitychange', () => {
 })
 
 app.use(router).use(vuetify).use(i18n).use(Vue3Toastify, toastifyOptions).use(pinia).mount('#app')
+
+installAppLogCapture(pinia)
+useAppLogStore(pinia).add('info', 'app', `VueTorrent ${import.meta.env.VITE_PACKAGE_VERSION ?? 'dev'} started`, navigator.userAgent)

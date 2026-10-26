@@ -2,6 +2,7 @@
 import { vOnLongPress } from '@vueuse/components'
 import { useRssStore } from '@/stores'
 import { RssArticle } from '@/types/vuetorrent'
+import { decodeHtmlEntities } from '@/utils/helpers'
 
 defineProps<{
   article: RssArticle
@@ -32,7 +33,7 @@ const rssStore = useRssStore()
               {{ $t('rssArticles.feeds.item.new') }}
             </v-chip>
           </div>
-          <div>{{ article.title }}</div>
+          <div>{{ decodeHtmlEntities(article.title) }}</div>
         </v-list-item-title>
 
         <v-list-item-subtitle class="d-block mt-3">

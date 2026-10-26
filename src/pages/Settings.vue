@@ -19,12 +19,14 @@ import VTorrentCardList from '@/components/Settings/VueTorrent/TorrentCard/List.
 import VTorrentCardTable from '@/components/Settings/VueTorrent/TorrentCard/Table.vue'
 import WebUI from '@/components/Settings/WebUI.vue'
 import { useI18nUtils } from '@/composables'
-import { useDialogStore, usePreferenceStore, useVueTorrentStore } from '@/stores'
+import { useAppLogStore, useAppStore, useDialogStore, usePreferenceStore, useVueTorrentStore } from '@/stores'
 
 const router = useRouter()
 const { t } = useI18nUtils()
 const dialogStore = useDialogStore()
 const preferenceStore = usePreferenceStore()
+const appLogStore = useAppLogStore()
+const appStore = useAppStore()
 const vueTorrentStore = useVueTorrentStore()
 
 // Title bar + main tabs stay pinned while scrolling; the VueTorrent sub-tabs stick just below them
@@ -61,7 +63,13 @@ async function saveSettings() {
   if (vueTorrentStore.hasUnsavedChanges) {
     vueTorrentStore.commitDraftBlockedExtensions()
   }
-  await preferenceStore.setPreferences()
+  const sentSettings = await preferenceStore.setPreferences()
+  // Names only, never values: some settings are passwords or paths
+  appLogStore.add(
+    'info',
+    'settings',
+    sentSettings.length > 0 ? `Saved ${sentSettings.length} qBittorrent setting(s): ${sentSettings.join(', ')}` : 'Saved VueTorrent settings (nothing changed in qBittorrent)'
+  )
   toast.success(t('settings.saveSuccess'))
   await preferenceStore.fetchPreferences()
 
@@ -102,6 +110,13 @@ function goHome() {
 }
 
 onBeforeRouteLeave((_to, _from, next) => {
+  // Being signed out sends you to the login page. Asking about unsaved changes there would trap you on a dead page,
+  // and the edits are kept in memory anyway, so they are still there after signing back in.
+  if (!appStore.isAuthenticated) {
+    next()
+    return
+  }
+
   if (vueTorrentStore.hasUnsavedChanges) {
     dialogStore.confirmAction({
       title: 'Unsaved Changes',

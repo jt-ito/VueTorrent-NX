@@ -35,15 +35,25 @@ const contentOrientation = computed(() => {
         <template v-if="Array.isArray(value)">
           <template v-for="(val, i) in value" :key="i">
             <v-divider v-if="i > 0" opacity=".75" thickness="2" style="border-top-style: dashed" />
-            <div class="d-flex flex-wrap justify-center">
+            <div class="text-no-wrap">
               <slot :value="val"></slot>
             </div>
           </template>
         </template>
-        <span v-else class="d-inline-flex flex-wrap justify-center">
+        <span v-else class="card-single d-inline-flex flex-wrap justify-center align-baseline">
           <slot :value="value"></slot>
         </span>
       </div>
     </div>
   </v-sheet>
 </template>
+
+<style scoped>
+/* The gap spaces value and unit side by side; the unit's own left margin would push it off-centre once it wraps below */
+.card-single {
+  column-gap: 4px;
+}
+.card-single :deep(.ml-1) {
+  margin-left: 0 !important;
+}
+</style>

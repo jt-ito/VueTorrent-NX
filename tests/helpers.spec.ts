@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { extensionToGlob, globToExtension, normalizeExtension, reconcileNativeExcludedFiles, runWithConcurrency } from '../src/utils/helpers'
+import { extensionToGlob, globToExtension, normalizeExtension, reconcileNativeExcludedFiles, runWithConcurrency, decodeHtmlEntities } from '../src/utils/helpers'
 
 describe('helpers', () => {
   describe('normalizeExtension', () => {
@@ -89,6 +89,32 @@ describe('helpers', () => {
 
     it('handles an empty list', async () => {
       await expect(runWithConcurrency([], 4, async () => {})).resolves.toBeUndefined()
+    })
+  })
+
+  describe('decodeHtmlEntities', () => {
+    it('decodes the common named entities', () => {
+      expect(decodeHtmlEntities('Kashita Maryoku wa &quot;Revo Barai&quot; de Kyousei Choushuu')).toBe('Kashita Maryoku wa "Revo Barai" de Kyousei Choushuu')
+      expect(decodeHtmlEntities('Tom &amp; Jerry &lt;1080p&gt; it&apos;s')).toBe("Tom & Jerry <1080p> it's")
+    })
+
+    it('decodes numeric entities', () => {
+      expect(decodeHtmlEntities('it&#39;s &#x22;ok&#x22; &#8217;')).toBe("it's \"ok\" ’")
+    })
+
+    it('leaves unknown, invalid and plain text alone', () => {
+      expect(decodeHtmlEntities('Fish & Chips')).toBe('Fish & Chips')
+      expect(decodeHtmlEntities('&unknown; &#0; &#xD800; &#99999999;')).toBe('&unknown; &#0; &#xD800; &#99999999;')
+      expect(decodeHtmlEntities('')).toBe('')
+    })
+
+    it('decodes one level only', () => {
+      expect(decodeHtmlEntities('&amp;quot;')).toBe('&quot;')
+    })
+
+    it('never interprets markup: tags stay plain text', () => {
+      expect(decodeHtmlEntities('<img src=x onerror=alert(1)>')).toBe('<img src=x onerror=alert(1)>')
+      expect(decodeHtmlEntities('&lt;script&gt;alert(1)&lt;/script&gt;')).toBe('<script>alert(1)</script>')
     })
   })
 })

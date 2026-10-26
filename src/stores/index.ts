@@ -1,4 +1,5 @@
 import { useAddTorrentStore } from './addTorrents'
+import { useAppLogStore } from './appLogs'
 import { useAppStore } from './app'
 import { useCategoryStore } from './categories'
 import { useContentStore } from './content'
@@ -24,6 +25,7 @@ import { useVueTorrentStore } from './vuetorrent'
 
 export {
   useAddTorrentStore,
+  useAppLogStore,
   useAppStore,
   useCategoryStore,
   useContentStore,

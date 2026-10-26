@@ -612,7 +612,24 @@
       "query": "Search in log message",
       "type": "Log Level"
     },
-    "title": "qBittorrent Logs"
+    "pageTitle": "Logs",
+    "tabs": {
+      "qbittorrent": "qBittorrent",
+      "vuetorrent": "VueTorrent"
+    },
+    "title": "qBittorrent Logs",
+    "vueTorrent": {
+      "clear": "Clear VueTorrent logs",
+      "copy": "Copy VueTorrent logs",
+      "download": "Download VueTorrent logs",
+      "empty": "No VueTorrent logs yet",
+      "levels": {
+        "error": "Error",
+        "info": "Info",
+        "warning": "Warning"
+      },
+      "repeated": "Happened {n} times in a row"
+    }
   },
   "navbar": {
     "addPanel": {

@@ -109,6 +109,21 @@ tr.ripple-fix {
   background: rgb(var(--v-theme-surface));
 }
 
+/* Four-across stat tiles: reserve two lines for the value so icons and text line up whether or not the unit wraps */
+.small-stat [data-testid='card-content'] {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 3rem;
+}
+
+/* Logs page: each tab pins its filters right below the page header (--logs-header-h is set by Logs.vue) */
+.logs-tab-sticky {
+  position: sticky;
+  top: calc(var(--v-layout-top, 0px) + var(--logs-header-h, 0px));
+  z-index: 4;
+}
+
 /* Grid layout */
 .d-grid {
   display: grid;

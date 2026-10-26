@@ -1,72 +1,51 @@
 <script setup lang="ts">
-import { TinyColor } from '@ctrl/tinycolor'
-import { useIntervalFn } from '@vueuse/core'
-import dayjs from 'dayjs'
+import { useElementSize } from '@vueuse/core'
 import { storeToRefs } from 'pinia'
-import { computed, onBeforeMount, onUnmounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { useTheme } from 'vuetify'
+import { toast } from 'vue3-toastify'
+import QbitLogs from '@/components/LogTabs/QbitLogs.vue'
+import VueTorrentLogs from '@/components/LogTabs/VueTorrentLogs.vue'
 import { useI18nUtils } from '@/composables'
-import { LogType } from '@/constants/qbit'
-import { useLogStore, useVueTorrentStore } from '@/stores'
-import { Log } from '@/types/qbit/models'
+import { downloadFile } from '@/helpers'
+import { useAppLogStore, useLogStore } from '@/stores'
+
+type LogTab = 'qbittorrent' | 'vuetorrent'
 
 const router = useRouter()
 const { t } = useI18nUtils()
-const { current: currentTheme } = useTheme()
 
 const logStore = useLogStore()
-const { filteredLogs, logTypeFilter, logMessageFilter, paginatedResults, currentPage, pageCount, reverseSort } = storeToRefs(logStore)
-const vueTorrentStore = useVueTorrentStore()
+const appLogStore = useAppLogStore()
+const { reverseSort: qbitReverseSort } = storeToRefs(logStore)
+const { reverseSort: appReverseSort } = storeToRefs(appLogStore)
 
-const colors = {
-  light: {
-    [LogType.NORMAL]: new TinyColor('black'),
-    [LogType.INFO]: new TinyColor('blue'),
-    [LogType.WARNING]: new TinyColor('orange'),
-    [LogType.CRITICAL]: new TinyColor('red'),
+// qBittorrent's logs come first and are what opens by default
+const tab = ref<LogTab>('qbittorrent')
+const reverseSort = computed({
+  get: () => (tab.value === 'qbittorrent' ? qbitReverseSort.value : appReverseSort.value),
+  set: value => {
+    if (tab.value === 'qbittorrent') qbitReverseSort.value = value
+    else appReverseSort.value = value
   },
-  dark: {
-    [LogType.NORMAL]: new TinyColor('white'),
-    [LogType.INFO]: new TinyColor('deepskyblue'),
-    [LogType.WARNING]: new TinyColor('darkorange'),
-    [LogType.CRITICAL]: new TinyColor('darkred').lighten(12),
-  },
-}
+})
 
-const logTypeOptions = ref([
-  { title: LogType[LogType.NORMAL], value: LogType.NORMAL },
-  { title: LogType[LogType.INFO], value: LogType.INFO },
-  { title: LogType[LogType.WARNING], value: LogType.WARNING },
-  { title: LogType[LogType.CRITICAL], value: LogType.CRITICAL },
-])
-
-const someTypesSelected = computed(() => logTypeFilter.value.length > 0)
-const allTypesSelected = computed(() => logTypeFilter.value.length === logTypeOptions.value.length)
+// Title and tabs stay pinned; each tab pins its filters right below them (see .logs-tab-sticky)
+const header = ref<HTMLElement>()
+const { height: headerHeight } = useElementSize(header, undefined, { box: 'border-box' })
 
 function goHome() {
   void router.push({ name: 'dashboard' })
 }
 
-function getLogTypeColor(log: Log) {
-  // @ts-expect-error: Element implicitly has an any type because expression of type string can't be used to index type
-  return `color: #${colors[currentTheme.value.dark ? 'dark' : 'light'][log.type].toHex()}`
+async function copyAppLogs() {
+  await navigator.clipboard.writeText(appLogStore.toText())
+  toast.success(t('toast.copy.success'))
 }
 
-function getLogTypeName(log: Log) {
-  return LogType[log.type]
-}
-
-function formatLogTimestamp(log: Log) {
-  return dayjs(log.timestamp * 1000).format(vueTorrentStore.dateFormat)
-}
-
-function toggleSelectAll() {
-  if (allTypesSelected.value) {
-    logTypeFilter.value = []
-  } else {
-    logTypeFilter.value = logTypeOptions.value.map(option => option.value)
-  }
+function downloadAppLogs() {
+  const stamp = new Date().toISOString().replace(/[:.]/g, '-')
+  downloadFile(`VueTorrent_logs_${stamp}.txt`, new Blob([appLogStore.toText()], { type: 'text/plain' }))
 }
 
 function handleKeyboardShortcut(e: KeyboardEvent) {
@@ -75,96 +54,37 @@ function handleKeyboardShortcut(e: KeyboardEvent) {
   }
 }
 
-onBeforeMount(async () => {
-  document.addEventListener('keydown', handleKeyboardShortcut)
-  await logStore.cleanAndFetchLogs()
-  useIntervalFn(() => void logStore.updateLogs(), 15000)
-})
-onUnmounted(() => {
-  document.removeEventListener('keydown', handleKeyboardShortcut)
-})
+onMounted(() => document.addEventListener('keydown', handleKeyboardShortcut))
+onBeforeUnmount(() => document.removeEventListener('keydown', handleKeyboardShortcut))
 </script>
 
 <template>
-  <div class="px-3 pb-3">
-    <!-- Title, filters and top page selector stay pinned while the log rows scroll -->
-    <div class="logs-sticky bg-background pt-3">
+  <div class="px-3 pb-3" :style="{ '--logs-header-h': `${headerHeight}px` }">
+    <div ref="header" class="logs-sticky bg-background pt-3">
       <div class="d-flex align-center">
         <div class="text-headline-medium ml-2">
-          {{ t('logs.title') }}
+          {{ t('logs.pageTitle') }}
         </div>
         <v-spacer />
         <div class="d-flex justify-end">
+          <template v-if="tab === 'vuetorrent'">
+            <v-btn icon="mdi-content-copy" :title="t('logs.vueTorrent.copy')" variant="plain" @click="copyAppLogs" />
+            <v-btn icon="mdi-download" :title="t('logs.vueTorrent.download')" variant="plain" @click="downloadAppLogs" />
+            <v-btn icon="mdi-delete-sweep" :title="t('logs.vueTorrent.clear')" variant="plain" @click="appLogStore.clear()" />
+          </template>
           <v-btn :icon="reverseSort ? 'mdi-sort-descending' : 'mdi-sort-ascending'" variant="plain" @click="reverseSort = !reverseSort" />
           <v-btn icon="mdi-close" variant="plain" @click="goHome" />
         </div>
       </div>
 
-      <v-list>
-        <v-list-item>
-          <v-row>
-            <v-col cols="6">
-              <v-select v-model="logTypeFilter" :items="logTypeOptions" :label="t('logs.filters.type')" chips hide-details multiple>
-                <template #prepend-item>
-                  <v-list-item :title="t('common.selectAll')" @click="toggleSelectAll">
-                    <template #prepend>
-                      <v-checkbox-btn :indeterminate="someTypesSelected && !allTypesSelected" :model-value="someTypesSelected" />
-                    </template>
-                  </v-list-item>
-                  <v-divider />
-                </template>
-              </v-select>
-            </v-col>
-
-            <v-col cols="6">
-              <v-text-field v-model="logMessageFilter" :label="t('logs.filters.query')" clearable hide-details />
-            </v-col>
-          </v-row>
-        </v-list-item>
-
-        <v-divider class="my-3" thickness="5" />
-
-        <v-list-item v-if="pageCount > 1">
-          <v-pagination v-model="currentPage" :length="pageCount" prev-icon="mdi-menu-left" next-icon="mdi-menu-right" />
-        </v-list-item>
-
-        <v-divider />
-      </v-list>
+      <v-tabs v-model="tab" bg-color="primary" grow>
+        <v-tab value="qbittorrent" :text="t('logs.tabs.qbittorrent')" />
+        <v-tab value="vuetorrent" :text="t('logs.tabs.vuetorrent')" />
+      </v-tabs>
     </div>
 
-    <v-list>
-      <template v-for="(log, index) in paginatedResults" :key="log.id">
-        <v-divider v-if="index > 0" />
-
-        <v-list-item class="pa-0">
-          <v-expansion-panels class="p-0">
-            <v-expansion-panel class="pa-0">
-              <v-expansion-panel-title class="text-no-wrap" :style="getLogTypeColor(log)">
-                <div class="d-flex mr-8 overflow-hidden">[{{ log.id }}] {{ log.message }}</div>
-                <v-spacer />
-                <div class="d-flex">
-                  {{ formatLogTimestamp(log) }}
-                </div>
-              </v-expansion-panel-title>
-              <v-expansion-panel-text class="wrap-word text-select" :style="getLogTypeColor(log)">
-                [{{ getLogTypeName(log) }}]
-                {{ log.message }}
-              </v-expansion-panel-text>
-            </v-expansion-panel>
-          </v-expansion-panels>
-        </v-list-item>
-      </template>
-
-      <v-list-item v-if="filteredLogs.length === 0">
-        {{ t('logs.emptyLogList') }}
-      </v-list-item>
-
-      <v-divider />
-
-      <v-list-item v-if="pageCount > 1">
-        <v-pagination v-model="currentPage" :length="pageCount" prev-icon="mdi-menu-left" next-icon="mdi-menu-right" />
-      </v-list-item>
-    </v-list>
+    <QbitLogs v-if="tab === 'qbittorrent'" />
+    <VueTorrentLogs v-else />
   </div>
 </template>
 

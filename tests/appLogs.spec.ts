@@ -85,4 +85,37 @@ describe('app log store', () => {
     expect(lines[1]).toMatch(/\[ERROR\] \[console\] boom \(x2\)$/)
     expect(lines.slice(2)).toEqual(['    at line 1', '    at line 2'])
   })
+
+  it('keeps numbering on after a reload instead of starting again from 0', () => {
+    const store = useAppLogStore()
+    // what the saved logs look like when the page loads again
+    store.logs = [
+      { id: 0, timestamp: 100, level: 'info', source: 'app', message: 'started', count: 1 },
+      { id: 1, timestamp: 110, level: 'info', source: 'network', message: 'refused', count: 1 },
+      { id: 2, timestamp: 120, level: 'info', source: 'settings', message: 'saved', count: 1 },
+    ]
+
+    store.add('info', 'app', 'started again')
+
+    expect(store.logs.map(l => l.id)).toEqual([0, 1, 2, 3])
+  })
+
+  it('repairs logs saved by the old version, whose ids restarted on every load', () => {
+    const store = useAppLogStore()
+    // each load restarted at 0, so the same ids appear several times and file order no longer follows time
+    store.logs = [
+      { id: 0, timestamp: 100, level: 'info', source: 'app', message: 'started', count: 1 },
+      { id: 1, timestamp: 101, level: 'info', source: 'network', message: 'refused', count: 1 },
+      { id: 2, timestamp: 150, level: 'info', source: 'exclusions', message: 'deselected', count: 1 },
+      { id: 0, timestamp: 200, level: 'info', source: 'app', message: 'started', count: 1 },
+      { id: 1, timestamp: 201, level: 'info', source: 'network', message: 'refused', count: 1 },
+    ]
+
+    store.add('warning', 'network', 'timed out')
+
+    expect(new Set(store.logs.map(l => l.id)).size).toBe(store.logs.length)
+    expect(store.logs.map(l => l.timestamp)).toEqual([...store.logs.map(l => l.timestamp)].sort((a, b) => a - b))
+    expect(store.logs.at(-1)).toMatchObject({ message: 'timed out' })
+    expect(store.toText().split('\n')[0]).toContain('[app] started')
+  })
 })

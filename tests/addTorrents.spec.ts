@@ -32,6 +32,11 @@ const mockVueTorrentStore = {
 vi.mock('@/stores/vuetorrent', () => ({
   useVueTorrentStore: () => mockVueTorrentStore
 }))
+// Torrents added by something else are processed once the torrent list (already refreshed by the app) shows their metadata
+const mockTorrentList = new Map([['testhash', { hasMetadata: true }]])
+vi.mock('@/stores/torrents', () => ({
+  useTorrentStore: () => ({ getTorrentByHash: (hash: string) => mockTorrentList.get(hash) })
+}))
 
 describe('addTorrents Helpers & Logic', () => {
   describe('normalizeExtension', () => {
@@ -140,8 +145,6 @@ describe('addTorrents Helpers & Logic', () => {
     it('applies DO_NOT_DOWNLOAD to files matching allBlockedExtensions', async () => {
       const store = useAddTorrentStore()
       // @ts-ignore
-      qbit.getTorrents.mockResolvedValue([{ hash: 'testhash', state: 'downloading', has_metadata: true }])
-      // @ts-ignore
       qbit.getTorrentFiles.mockResolvedValue([
         { index: 0, name: 'video.mkv' },
         { index: 1, name: 'sample.nfo' },
@@ -158,12 +161,10 @@ describe('addTorrents Helpers & Logic', () => {
     it('prevents concurrent overlapping execution for the same hash', async () => {
       const store = useAddTorrentStore()
       // @ts-ignore
-      qbit.getTorrents.mockImplementation(async () => {
+      qbit.getTorrentFiles.mockImplementation(async () => {
         await new Promise(r => setTimeout(r, 50))
-        return [{ hash: 'testhash', state: 'downloading', has_metadata: true }]
+        return [{ index: 0, name: 'video.mkv' }]
       })
-      // @ts-ignore
-      qbit.getTorrentFiles.mockResolvedValue([{ index: 0, name: 'video.mkv' }])
 
       const p1 = store.processExternalTorrentBlocklist('testhash')
       const p2 = store.processExternalTorrentBlocklist('testhash')

@@ -2,7 +2,10 @@ import { useIntervalFn } from '@vueuse/core'
 import { acceptHMRUpdate, defineStore, storeToRefs } from 'pinia'
 import { ref, shallowRef, watch } from 'vue'
 import { useTask } from 'vue-concurrency'
+import { toast } from 'vue3-toastify'
+import { useTheme } from 'vuetify'
 import { useAppStore } from './app'
+import { useAppLogStore } from './appLogs'
 import { useCategoryStore } from './categories'
 import { useDashboardStore } from './dashboard'
 import { useNavbarStore } from './navbar'
@@ -10,10 +13,14 @@ import { useTagStore } from './tags'
 import { useTorrentStore } from './torrents'
 import { useTrackerStore } from './trackers'
 import { useVueTorrentStore } from './vuetorrent'
+import { useI18nUtils } from '@/composables'
+import { createUnresponsiveNotice } from '@/composables/UnresponsiveNotice'
 import qbit from '@/services/qbit'
 import { ServerState } from '@/types/qbit/models'
 import { isFullUpdate } from '@/types/qbit/responses'
 import { ShareLimitAction } from '@/types/vuetorrent'
+
+const UNRESPONSIVE_TOAST_ID = 'qbit-unresponsive'
 
 /** Keep-alive interval in ms when the tab is backgrounded */
 const KEEP_ALIVE_INTERVAL_MS = 30_000
@@ -88,9 +95,39 @@ export const useMaindataStore = defineStore('maindata', () => {
     navbarStore.pushUploadData(serverState.value?.up_info_speed ?? 0)
   }
 
+  // Says so on screen when qBittorrent stops answering, so a stall doesn't just look like a frozen page
+  const { t } = useI18nUtils()
+  const vuetifyTheme = useTheme()
+  const connectionNotice = createUnresponsiveNotice({
+    onUnresponsive: isFirst => {
+      if (isFirst) useAppLogStore().add('warning', 'network', 'qBittorrent stopped answering')
+      // Also re-shown after the tab was hidden (which clears toasts) while the outage is still going on
+      if (!toast.isActive(UNRESPONSIVE_TOAST_ID)) {
+        // Follows the app's own light/dark theme; the "colored" toast theme would turn it bright yellow even in dark mode
+        toast(t('toast.qbit.unresponsive'), {
+          toastId: UNRESPONSIVE_TOAST_ID,
+          type: 'default',
+          theme: vuetifyTheme.current.value.dark ? 'dark' : 'light',
+          isLoading: true,
+          hideProgressBar: true,
+          closeOnClick: false,
+        })
+      }
+    },
+    onRecovered: downMs => {
+      toast.remove(UNRESPONSIVE_TOAST_ID)
+      useAppLogStore().add('info', 'network', `qBittorrent is answering again (after ${Math.round(downMs / 1000)}s)`)
+      toast.success(t('toast.qbit.reconnected'), { toastId: 'qbit-reconnected', autoClose: 2500 })
+    },
+  })
+
   async function updateMaindata() {
+    const poll = connectionNotice.begin()
+    let hasAnswered = false
     try {
       const response = await qbit.getMaindata(rid.value)
+      hasAnswered = true
+      poll.succeed()
       rid.value = response.rid
 
       if (isFullUpdate(response)) {
@@ -111,6 +148,13 @@ export const useMaindataStore = defineStore('maindata', () => {
       // filter out deleted torrents from selection
       dashboardStore.selectedTorrents = dashboardStore.selectedTorrents.filter(hash => !response.torrents_removed?.includes(hash))
     } catch (error: any) {
+      if (error?.response?.status === 403 || hasAnswered) {
+        // Logged out, or a problem while handling an answer that did arrive: neither means qBittorrent isn't answering
+        poll.cancel()
+      } else {
+        poll.fail()
+      }
+
       if (error?.response?.status === 403) {
         console.error('No longer authenticated, logging out...')
         await appStore.setAuthStatus(false)

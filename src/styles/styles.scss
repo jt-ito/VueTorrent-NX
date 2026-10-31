@@ -147,3 +147,10 @@ tr.ripple-fix {
     }
   }
 }
+
+// Toasts size to their content (a long one-line toast grows wider, up to a third of the screen) instead of a fixed 320px
+.Toastify__toast-container--bottom-right {
+  width: max-content;
+  max-width: 33vw;
+  min-width: 320px;
+}

@@ -1378,7 +1378,15 @@
   },
   "toast": {
     "add": {
+      "already_exists": "Already in qBittorrent: {name}",
+      "already_exists_many": "These {n} torrents are already in qBittorrent",
       "error": "Error while adding torrents",
+      "error_http": "qBittorrent refused it (HTTP {status})",
+      "error_invalid_file": "That isn't a valid torrent file",
+      "error_refused": "qBittorrent didn't add it. It may already be in your list, or the link or file may not be valid",
+      "error_server": "qBittorrent had a problem adding it (HTTP {status})",
+      "error_session": "Your login expired. Sign in again, then try again",
+      "error_unreachable": "Couldn't reach qBittorrent. Check that it's running, then try again",
       "pending": "Sending torrents...",
       "success": "{n} torrent added | {n} torrents added"
     },
@@ -1394,6 +1402,10 @@
     },
     "qbit": {
       "not_supported": "Only available for qbit >= {version}"
+    },
+    "qbit": {
+      "reconnected": "Connected to qBittorrent again",
+      "unresponsive": "qBittorrent isn't responding. Retrying..."
     },
     "version": {
       "latest": "You're on the latest and greatest!",

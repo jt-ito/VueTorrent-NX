@@ -46,22 +46,28 @@ export function extractMagnetHash(uri: string): string | null {
 }
 
 /**
- * Runs `task` for every item with at most `limit` running at once (a failing task doesn't stop the others).
- * Used to avoid flooding the server with one request chain per torrent.
+ * Returns a function that runs tasks with at most `limit` running at the same time; the others wait their turn.
+ * Used to avoid flooding the server with a request chain per torrent.
  */
-export async function runWithConcurrency<T>(items: T[], limit: number, task: (item: T) => Promise<unknown>): Promise<void> {
-  let next = 0
-  async function worker() {
-    while (next < items.length) {
-      const item = items[next++]
-      try {
-        await task(item)
-      } catch {
-        // one failing item must not stall the queue
-      }
+export function createLimiter(limit: number) {
+  let running = 0
+  const waiting: (() => void)[] = []
+
+  return async function limited<T>(task: () => Promise<T>): Promise<T> {
+    if (running >= limit) {
+      // the slot is handed over directly by whoever finishes, so the limit can't be exceeded in between
+      await new Promise<void>(resolve => waiting.push(resolve))
+    } else {
+      running++
+    }
+    try {
+      return await task()
+    } finally {
+      const next = waiting.shift()
+      if (next) next()
+      else running--
     }
   }
-  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker))
 }
 
 const NAMED_ENTITIES: Record<string, string> = { quot: '"', amp: '&', lt: '<', gt: '>', apos: "'", nbsp: '\u00a0' }

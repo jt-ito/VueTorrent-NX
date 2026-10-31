@@ -1,16 +1,19 @@
 <script lang="ts" setup>
 import { storeToRefs } from 'pinia'
-import { computed, onBeforeMount, ref } from 'vue'
+import { computed, h, onBeforeMount, ref } from 'vue'
+import { useTheme } from 'vuetify'
 import { toast } from 'vue3-toastify'
 import AddTorrentParamsForm from './AddTorrentParamsForm.vue'
 import HistoryField from '@/components/Core/HistoryField.vue'
 import { useDialog, useI18nUtils } from '@/composables'
-import { HistoryKey } from '@/constants/vuetorrent'
 import { StopCondition } from '@/constants/qbit/AppPreferences'
-import { useAddTorrentStore, useAppStore, useDialogStore, useTorrentStore, useVueTorrentStore } from '@/stores'
-import { AddTorrentPayload } from '@/types/qbit/payloads'
+import { HistoryKey } from '@/constants/vuetorrent'
 import qbit from '@/services/qbit'
+import { useAddTorrentStore, useAppStore, useDialogStore, useTorrentStore, useVueTorrentStore } from '@/stores'
 import { getBlockedFileIds } from '@/stores/addTorrents'
+import { AddTorrentPayload } from '@/types/qbit/payloads'
+import { describeAddError } from '@/utils/addTorrentError'
+import { splitKnownTorrents } from '@/utils/torrentInfo'
 
 const props = withDefaults(
   defineProps<{
@@ -30,6 +33,7 @@ const appStore = useAppStore()
 const dialogStore = useDialogStore()
 const torrentStore = useTorrentStore()
 const vueTorrentStore = useVueTorrentStore()
+const vuetifyTheme = useTheme()
 
 const fileOverflowDisplayLimit = 2
 
@@ -47,6 +51,35 @@ const rename = computed({
   get: () => form.value.rename,
   set: value => (form.value.rename = value || undefined),
 })
+
+/** Specific text for why adding failed (bad file, session expired...), instead of one vague error for everything */
+function addErrorText(error: unknown) {
+  const { key, params } = describeAddError(error)
+  return params ? t(key, params) : t(key)
+}
+
+function addedAlreadyText(alreadyAdded: { name: string }[]) {
+  return alreadyAdded.length === 1 ? t('toast.add.already_exists', { name: alreadyAdded[0].name }) : t('toast.add.already_exists_many', { n: alreadyAdded.length })
+}
+
+/** Options for the "already in qBittorrent" toast: one line that widens up to a third of the screen, ellipsis + full name on hover, themed */
+function addedAlreadyToast(alreadyAdded: { name: string }[]) {
+  const text = addedAlreadyText(alreadyAdded)
+  return {
+    render: () => h('div', { title: text, style: { maxWidth: 'calc(max(33vw, 320px) - 70px)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' } }, text),
+    type: 'default' as const,
+    theme: vuetifyTheme.current.value.dark ? ('dark' as const) : ('light' as const),
+    hideProgressBar: true,
+    toastStyle: { borderLeft: '5px solid #14b8a6' },
+  }
+}
+
+function finishAdding() {
+  cookieField.value?.saveValueToHistory()
+  addTorrentParamsForm.value?.saveFields()
+  addTorrentStore.resetForm()
+  close()
+}
 
 async function submit() {
   if (!isFormValid.value) return
@@ -80,12 +113,24 @@ async function submit() {
   const torrentUrls = urls.value
   const torrentsCount = torrentFiles.length + torrentUrls.split('\n').filter(url => url.trim().length).length
 
+  // Which of these does qBittorrent already have? Still sent (it merges any new trackers into the existing torrent),
+  // but then it can be explained as such, rather than as a vague error
+  const known = await splitKnownTorrents(torrentFiles, torrentUrls, torrentStore.torrents)
+  const everythingAlreadyAdded = known.alreadyAdded.length > 0 && known.alreadyAdded.length === torrentsCount
+
   // ── Feature 1: Show pre-download file picker ──────────────────────────────
   if (vueTorrentStore.showPredownloadPicker && torrentsCount === 1) {
     // Detect if source is a magnet/URL (needs metadata poll) or .torrent file
     const isMagnet = torrentFiles.length === 0
 
-    const hashOrNull = await addTorrentStore.addTorrentStopped(torrentFiles, torrentUrls, payload)
+    let hashOrNull: string | null
+    try {
+      hashOrNull = await addTorrentStore.addTorrentStopped(torrentFiles, torrentUrls, payload)
+    } catch (error) {
+      if (everythingAlreadyAdded) toast(addedAlreadyToast(known.alreadyAdded).render, { ...addedAlreadyToast(known.alreadyAdded), autoClose: 4000 })
+      else toast.error(addErrorText(error))
+      return
+    }
     if (!hashOrNull) {
       toast.error(t('toast.add.error', torrentsCount))
       return
@@ -107,7 +152,7 @@ async function submit() {
         } else if (blockedIds.length === 0) {
           await qbit.removeTorrentTag([hashOrNull], ['vt-predownload'])
           await addTorrentStore.resumeTorrent(hashOrNull)
-          
+
           cookieField.value?.saveValueToHistory()
           addTorrentParamsForm.value?.saveFields()
           addTorrentStore.resetForm()
@@ -132,51 +177,27 @@ async function submit() {
     return
   }
 
-  // ── Feature 2: Silent extension blocklist (no picker) ─────────────────────
-  if (vueTorrentStore.allBlockedExtensions.length > 0 && torrentsCount === 1) {
-    void toast
-      .promise(
-        addTorrentStore.addTorrentWithBlocklist(torrentFiles, torrentUrls, payload),
-        {
-          pending: t('toast.add.pending'),
-          error: t('toast.add.error', torrentsCount),
-          success: t('toast.add.success', torrentsCount),
-        },
-        { autoClose: 1500 }
-      )
-      .then(() => {
-        cookieField.value?.saveValueToHistory()
-        addTorrentParamsForm.value?.saveFields()
-        addTorrentStore.resetForm()
-        close()
-      })
-    return
-  }
-
+  // With file exclusions configured nothing special happens here: the torrent is added normally and the exclusions are
+  // applied in the background once its metadata is in (see processExternalTorrentBlocklist). Waiting for that here
+  // kept this dialog open for as long as the metadata took, which for a magnet with no reachable peers is forever.
   // ── Default: add normally ─────────────────────────────────────────────────
   // For batch adds when picker is enabled, clear the stop condition so magnets
   // don't pause after metadata. The background sync will apply the blocklist.
-  const finalPayload = (torrentsCount > 1 && vueTorrentStore.showPredownloadPicker)
-    ? { ...payload, stopCondition: StopCondition.NONE }
-    : payload
-  void toast
-    .promise(
-      torrentStore.addTorrents(torrentFiles, torrentUrls, finalPayload),
-      {
-        pending: t('toast.add.pending'),
-        error: t('toast.add.error', torrentsCount),
-        success: t('toast.add.success', torrentsCount),
-      },
-      {
-        autoClose: 1500,
-      }
-    )
-    .then(() => {
-      cookieField.value?.saveValueToHistory()
-      addTorrentParamsForm.value?.saveFields()
-      addTorrentStore.resetForm()
-      close()
-    })
+  const finalPayload = torrentsCount > 1 && vueTorrentStore.showPredownloadPicker ? { ...payload, stopCondition: StopCondition.NONE } : payload
+  const toastId = toast.loading(t('toast.add.pending'))
+  try {
+    await torrentStore.addTorrents(torrentFiles, torrentUrls, finalPayload)
+    toast.update(toastId, { render: t('toast.add.success', torrentsCount), type: 'success', isLoading: false, autoClose: 1500 })
+    finishAdding()
+  } catch (error) {
+    if (everythingAlreadyAdded && (error as { response?: { status?: number } })?.response?.status === 409) {
+      // qBittorrent refuses a duplicate with a 409 (after merging any new trackers); that is not a failure worth a red error
+      toast.update(toastId, { ...addedAlreadyToast(known.alreadyAdded), isLoading: false, autoClose: 4000 })
+      finishAdding()
+    } else {
+      toast.update(toastId, { render: addErrorText(error), type: 'error', isLoading: false, autoClose: 5000 })
+    }
+  }
 }
 
 function close() {

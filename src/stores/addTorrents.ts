@@ -5,7 +5,7 @@ import { useAppLogStore } from './appLogs'
 import { usePreferenceStore } from './preferences'
 import { useVueTorrentStore } from './vuetorrent'
 import { useDialogStore } from './dialog'
-import { extractMagnetHash, normalizeExtension } from '@/utils/helpers'
+import { createLimiter, extractMagnetHash, normalizeExtension } from '@/utils/helpers'
 import { FilePriority, FilterState } from '@/constants/qbit'
 import { StopCondition } from '@/constants/qbit/AppPreferences'
 import { TorrentState as QbitTorrentState } from '@/constants/qbit/TorrentState'
@@ -20,6 +20,14 @@ export { normalizeExtension }
 const METADATA_TIMEOUT_MS = 60_000
 /** How often (ms) to poll torrent state while waiting for metadata */
 const METADATA_POLL_MS = 1_000
+/** How long a torrent added by something else may take to get its metadata before we stop watching for it */
+const EXTERNAL_METADATA_TIMEOUT_MS = 30 * 60_000
+/** How many torrents may have their files fetched and updated at the same moment */
+const EXTERNAL_NETWORK_CONCURRENCY = 4
+
+// Loaded on first use (and then reused): the torrents store imports this one, so it can't be imported up front
+let torrentsStoreModule: Promise<typeof import('./torrents')> | undefined
+const loadTorrentsStoreModule = () => (torrentsStoreModule ??= import('./torrents'))
 
 /**
  * Returns the file indexes from `files` that match any of `blockedExts` (pre-normalized).
@@ -267,41 +275,6 @@ export const useAddTorrentStore = defineStore(
       return blocked
     }
 
-    /**
-     * Full silent pipeline: add stopped → wait for metadata → apply blocklist → resume.
-     * Used when showPredownloadPicker = false but blockedExtensions is non-empty.
-     */
-    async function addTorrentWithBlocklist(torrentFiles: File[], torrentUrls: string, payload: AddTorrentPayload): Promise<void> {
-      const hash = await addTorrentStopped(torrentFiles, torrentUrls, payload)
-      if (!hash) {
-        // Couldn't detect hash — fall through; torrent will download normally
-        return
-      }
-
-      const cancelRef = { value: false }
-      const ready = await waitForMetadata(hash, cancelRef)
-      if (!ready) return
-
-      const files = await waitForFiles(hash)
-      if (files.length === 0) return
-
-      const blockedExts = vueTorrentStore.allBlockedExtensions
-      if (vueTorrentStore.skipPickerForSingleFile && files.length === 1) {
-        const blocked = getBlockedFileIds(files, blockedExts)
-        if (blocked.length === 1) {
-          await qbit.deleteTorrents([hash], true)
-          const { default: SingleFileSkippedDialog } = await import('@/components/Dialogs/SingleFileSkippedDialog.vue')
-          const dialogStore = useDialogStore()
-          useAppLogStore().add('warning', 'exclusions', `Removed single-file torrent because its file is excluded: ${files[0].name}`)
-          dialogStore.createDialog(SingleFileSkippedDialog, { filename: files[0].name })
-          return
-        }
-      }
-      await applyExtensionBlocklist(hash, files, blockedExts)
-      await qbit.removeTorrentTag([hash], ['vt-predownload'])
-      await resumeTorrent(hash)
-    }
-
     const pendingPickerHashes = ref<Set<string>>(new Set())
     watch(pendingPickerHashes, (val: any) => {
       if (!(val instanceof Set)) {
@@ -312,6 +285,27 @@ export const useAddTorrentStore = defineStore(
     const processedExternalHashes = ref<string[]>([])
     const currentlyProcessingExternalHashes = ref<Set<string>>(new Set())
 
+    const limitNetwork = createLimiter(EXTERNAL_NETWORK_CONCURRENCY)
+
+    /**
+     * Waits until a torrent has its metadata by looking at the torrent list the app already refreshes, so a torrent that
+     * is slow to get metadata costs no requests at all while it waits.
+     */
+    async function waitForMetadataFromList(hash: string, timeoutMs: number = EXTERNAL_METADATA_TIMEOUT_MS): Promise<boolean> {
+      const { useTorrentStore } = await loadTorrentsStoreModule()
+      const torrentStore = useTorrentStore()
+      const deadline = Date.now() + timeoutMs
+
+      while (Date.now() < deadline) {
+        const torrent = torrentStore.getTorrentByHash(hash)
+        if (!torrent) return false // removed in the meantime
+        if (torrent.hasMetadata) return true
+        await new Promise(r => setTimeout(r, METADATA_POLL_MS))
+      }
+      return false
+    }
+
+    /** Applies the file exclusions to a torrent that was added by something else (or by us, without waiting for it) */
     async function processExternalTorrentBlocklist(hash: string): Promise<boolean> {
       const blockedExts = vueTorrentStore.allBlockedExtensions
       if (blockedExts.length === 0) return true
@@ -319,26 +313,27 @@ export const useAddTorrentStore = defineStore(
       currentlyProcessingExternalHashes.value.add(hash)
 
       try {
-        const cancelRef = { value: false }
-        const ready = await waitForMetadata(hash, cancelRef)
-        if (!ready) return false
+        if (!(await waitForMetadataFromList(hash))) return false
 
-        const files = await waitForFiles(hash)
-        if (files.length === 0) return false
+        // Only the part that talks to qBittorrent is limited; waiting for metadata above is free
+        return await limitNetwork(async () => {
+          const files = await waitForFiles(hash)
+          if (files.length === 0) return false
 
-        if (vueTorrentStore.skipPickerForSingleFile && files.length === 1) {
-          const blocked = getBlockedFileIds(files, blockedExts)
-          if (blocked.length === 1) {
-            await qbit.deleteTorrents([hash], true)
-            const { default: SingleFileSkippedDialog } = await import('@/components/Dialogs/SingleFileSkippedDialog.vue')
-            const dialogStore = useDialogStore()
-            useAppLogStore().add('warning', 'exclusions', `Removed single-file torrent because its file is excluded: ${files[0].name}`)
-            dialogStore.createDialog(SingleFileSkippedDialog, { filename: files[0].name })
-            return true
+          if (vueTorrentStore.skipPickerForSingleFile && files.length === 1) {
+            const blocked = getBlockedFileIds(files, blockedExts)
+            if (blocked.length === 1) {
+              await qbit.deleteTorrents([hash], true)
+              const { default: SingleFileSkippedDialog } = await import('@/components/Dialogs/SingleFileSkippedDialog.vue')
+              const dialogStore = useDialogStore()
+              useAppLogStore().add('warning', 'exclusions', `Removed single-file torrent because its file is excluded: ${files[0].name}`)
+              dialogStore.createDialog(SingleFileSkippedDialog, { filename: files[0].name })
+              return true
+            }
           }
-        }
-        await applyExtensionBlocklist(hash, files, blockedExts)
-        return true
+          await applyExtensionBlocklist(hash, files, blockedExts)
+          return true
+        })
       } finally {
         currentlyProcessingExternalHashes.value.delete(hash)
       }
@@ -378,7 +373,6 @@ export const useAddTorrentStore = defineStore(
       waitForFiles,
       resumeTorrent,
       applyExtensionBlocklist,
-      addTorrentWithBlocklist,
       cleanupOrphanedTorrents,
       pendingPickerHashes,
       processedExternalHashes,

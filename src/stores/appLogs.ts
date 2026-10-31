@@ -35,7 +35,6 @@ export const useAppLogStore = defineStore(
   'appLogs',
   () => {
     const logs = ref<AppLog[]>([])
-    const nextId = ref(0)
     const levelFilter = ref<AppLogLevel[]>([...APP_LOG_LEVELS])
     const messageFilter = ref('')
     const reverseSort = ref(true)
@@ -47,8 +46,18 @@ export const useAppLogStore = defineStore(
       30
     )
 
+    /**
+     * Entries saved by an earlier version could share ids (the counter used to restart on every page load), which scrambles
+     * the order and gives list rows duplicate keys. If that is the case, renumber them in time order.
+     */
+    function repairDuplicateIds() {
+      if (new Set(logs.value.map(log => log.id)).size === logs.value.length) return
+      logs.value = toSorted(logs.value, (a, b) => a.timestamp - b.timestamp || a.id - b.id).map((log, index) => ({ ...log, id: index }))
+    }
+
     /** Adds an entry. The same entry repeating right after itself is counted instead of listed again. */
     function add(level: AppLogLevel, source: string, message: string, details?: string) {
+      repairDuplicateIds()
       const text = clip(message, MAX_MESSAGE_LENGTH)!
       const now = Math.floor(Date.now() / 1000)
       const last = logs.value.at(-1)
@@ -59,7 +68,9 @@ export const useAppLogStore = defineStore(
         return
       }
 
-      logs.value.push({ id: nextId.value++, timestamp: now, level, source, message: text, details: clip(details, MAX_DETAILS_LENGTH), count: 1 })
+      // Derived from what is stored, so the numbering carries on after a reload
+      const id = logs.value.reduce((highest, log) => Math.max(highest, log.id), -1) + 1
+      logs.value.push({ id, timestamp: now, level, source, message: text, details: clip(details, MAX_DETAILS_LENGTH), count: 1 })
       if (logs.value.length > MAX_APP_LOGS) {
         logs.value.splice(0, logs.value.length - MAX_APP_LOGS)
       }
@@ -95,7 +106,6 @@ export const useAppLogStore = defineStore(
       toText,
       $reset: () => {
         logs.value = []
-        nextId.value = 0
         levelFilter.value = [...APP_LOG_LEVELS]
         messageFilter.value = ''
         reverseSort.value = true
@@ -106,7 +116,7 @@ export const useAppLogStore = defineStore(
     persistence: {
       enabled: true,
       // Kept across refreshes on purpose: the moments worth reading about are often the ones that end in a reload
-      storageItems: [{ storage: localStorage, includePaths: ['logs', 'nextId', 'levelFilter', 'reverseSort'] }],
+      storageItems: [{ storage: localStorage, includePaths: ['logs', 'levelFilter', 'reverseSort'] }],
     },
   }
 )

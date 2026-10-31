@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { extensionToGlob, globToExtension, normalizeExtension, reconcileNativeExcludedFiles, runWithConcurrency, decodeHtmlEntities } from '../src/utils/helpers'
+import { extensionToGlob, globToExtension, normalizeExtension, reconcileNativeExcludedFiles, createLimiter, decodeHtmlEntities } from '../src/utils/helpers'
 
 describe('helpers', () => {
   describe('normalizeExtension', () => {
@@ -62,33 +62,51 @@ describe('helpers', () => {
     })
   })
 
-  describe('runWithConcurrency', () => {
-    it('never runs more than `limit` tasks at once and runs every item', async () => {
+  describe('createLimiter', () => {
+    it('never runs more than `limit` tasks at once, and runs every task', async () => {
+      const limited = createLimiter(3)
       let active = 0
       let peak = 0
       const done: number[] = []
-      await runWithConcurrency([1, 2, 3, 4, 5, 6, 7, 8, 9, 10], 3, async n => {
-        active++
-        peak = Math.max(peak, active)
-        await new Promise(r => setTimeout(r, 5))
-        active--
-        done.push(n)
-      })
+
+      await Promise.all(
+        Array.from({ length: 12 }, (_, n) =>
+          limited(async () => {
+            active++
+            peak = Math.max(peak, active)
+            await new Promise(r => setTimeout(r, 5))
+            active--
+            done.push(n)
+          })
+        )
+      )
+
       expect(peak).toBe(3)
-      expect(done.sort((a, b) => a - b)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
+      expect(done.sort((a, b) => a - b)).toEqual([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11])
     })
 
-    it('keeps going when a task throws', async () => {
-      const done: number[] = []
-      await runWithConcurrency([1, 2, 3], 1, async n => {
-        if (n === 2) throw new Error('boom')
-        done.push(n)
+    it('passes results and errors back to the caller, and a failing task does not block the queue', async () => {
+      const limited = createLimiter(1)
+
+      const results = await Promise.allSettled([limited(async () => 'a'), limited(async () => Promise.reject(new Error('boom'))), limited(async () => 'c')])
+
+      expect(results.map(r => r.status)).toEqual(['fulfilled', 'rejected', 'fulfilled'])
+      expect((results[0] as PromiseFulfilledResult<string>).value).toBe('a')
+      expect((results[2] as PromiseFulfilledResult<string>).value).toBe('c')
+    })
+
+    it('lets new tasks start straight away once the queue is empty', async () => {
+      const limited = createLimiter(2)
+      await limited(async () => undefined)
+      await limited(async () => undefined)
+
+      let started = false
+      const pending = limited(async () => {
+        started = true
       })
-      expect(done).toEqual([1, 3])
-    })
+      await pending
 
-    it('handles an empty list', async () => {
-      await expect(runWithConcurrency([], 4, async () => {})).resolves.toBeUndefined()
+      expect(started).toBe(true)
     })
   })
 
